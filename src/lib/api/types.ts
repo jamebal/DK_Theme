@@ -17,6 +17,7 @@ export type UserInfo = {
   expired_at?: number | null;
   transfer_enable?: number;
   d?: number;
+  u?: number;
   remind_expire?: number | boolean;
   remind_traffic?: number | boolean;
 };
@@ -26,6 +27,7 @@ export type SubscribeInfo = {
   token?: string;
   transfer_enable?: number;
   d?: number;
+  u?: number;
   expired_at?: number | null;
   plan?: string | null;
 };
@@ -153,7 +155,8 @@ export type NodeStatus = {
   network?: string | null;
   tags?: string[];
   rate?: number | null;
-  online: boolean;
+  online: boolean | null;
+  protocol?: string | null;
   latency?: number | null;
   load?: number | null;
   loss?: number | null;

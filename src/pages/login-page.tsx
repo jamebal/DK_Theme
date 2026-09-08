@@ -8,7 +8,6 @@ import { AuthPasswordInput } from '@/components/auth-password-input'
 import { Button } from '@/components/ui/button'
 import {
   Field,
-  FieldDescription,
   FieldError,
   FieldGroup,
   FieldLabel,
@@ -67,7 +66,7 @@ export function LoginPage() {
           <div className='inline-flex items-center rounded-full border border-primary/12 bg-primary/8 px-3 py-1 text-[11px] font-medium tracking-[0.16em] text-primary uppercase'>账号登录</div>
           <div className='space-y-2'>
             <h1 className='text-3xl font-semibold tracking-tight'>欢迎回到 {appConfig.appName}</h1>
-            <p className='mx-auto max-w-sm text-sm leading-6 text-balance text-muted-foreground'>输入你的邮箱和密码，继续访问账户、订单与服务信息。</p>
+            <p className='mx-auto max-w-sm text-sm leading-6 text-balance text-muted-foreground'>输入你的邮箱和密码，继续访问订阅与节点信息。</p>
           </div>
         </div>
 
@@ -103,11 +102,7 @@ export function LoginPage() {
           </Button>
         </Field>
 
-        <Field>
-          <FieldDescription className='text-center'>
-            还没有账户？ <Link to='/register' className='underline underline-offset-4 hover:text-primary'>立即注册</Link>
-          </FieldDescription>
-        </Field>
+
       </FieldGroup>
     </form>
   )

@@ -36,6 +36,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { useAuth } from '@/features/auth/auth-context'
+import { validSubscriptionUrl } from '@/components/subscription-link'
 import { copyText } from '@/lib/clipboard'
 import { appConfig } from '@/lib/config'
 
@@ -58,7 +59,6 @@ type ClientItem = {
   primary: string
   link: string
   downloads?: ClientDownloadOption[]
-  docs?: string
   badges?: string[]
   supportsScheme?: boolean
   schemeLabel?: string
@@ -95,18 +95,18 @@ const v2rayNDownloads: ClientDownloadOption[] = [
   },
 ]
 
-const clashDownloads: ClientDownloadOption[] = [
+const clashVergeRevDownloads: ClientDownloadOption[] = [
   {
     label: 'Windows',
-    href: appConfig.downloads.clash.windows,
+    href: appConfig.downloads.clashVergeRev.windows,
   },
   {
     label: 'Mac Intel 芯片',
-    href: appConfig.downloads.clash.macIntel,
+    href: appConfig.downloads.clashVergeRev.macIntel,
   },
   {
     label: 'Mac M 芯片',
-    href: appConfig.downloads.clash.macAppleSilicon,
+    href: appConfig.downloads.clashVergeRev.macAppleSilicon,
   },
 ]
 
@@ -123,28 +123,26 @@ const clients: ClientItem[] = [
     platform: 'Windows / macOS',
     image: 'https://pub-56954302827c4850ac0f10fdb853206b.r2.dev/original/landscape/20260410-a5535cd1.avif',
     summary: '支持 Windows 与 macOS，适合希望按设备架构分别下载的用户。',
-    primary: '选择版本下载',
-    link: 'https://github.com/2dust/v2rayN/releases',
+    primary: '下载最新版本',
+    link: 'https://github.com/2dust/v2rayN/releases/latest',
     downloads: v2rayNDownloads,
-    docs: '/knowledge#v2rayn',
     badges: ['推荐'],
-    importHint: '下载按钮已按 Windows、Mac Intel、Mac M 芯片区分，可直接选择对应版本。',
+    importHint: '下载链接始终前往 GitHub 最新发布页，请选择对应系统和芯片架构的安装包。',
     deviceTypes: ['desktop'],
     platforms: ['windows', 'mac-intel', 'mac-apple-silicon'],
   },
   {
-    name: 'Clash',
+    name: 'clash-verge-rev',
     platform: 'Windows / macOS',
-    image: 'https://pub-56954302827c4850ac0f10fdb853206b.r2.dev/landscape/webp/20260410-cdfbe690.webp',
+    image: 'https://cloud.jmal.top/api/direct-file/gBsVKf2WFC3S92KW/clash-verge-rev.png',
     summary: '适合作为主力桌面客户端，支持配置切换与规则分流。',
-    primary: '选择版本下载',
-    link: 'https://github.com/MetaCubeX/mihomo/releases',
-    downloads: clashDownloads,
-    docs: '/knowledge#clash-meta',
+    primary: '下载最新版本',
+    link: 'https://github.com/clash-verge-rev/clash-verge-rev/releases/latest',
+    downloads: clashVergeRevDownloads,
     supportsScheme: true,
     schemeLabel: '快速导入配置',
     schemeBuilder: (url) => `clash://install-config?url=${encodeURIComponent(url)}&name=${encodeURIComponent(`${appConfig.appName}订阅`)}`,
-    importHint: '已支持 Clash Scheme，可快速拉起并导入配置。',
+    importHint: '支持一键导入 clash-verge-rev；下载链接前往 GitHub 最新发布页，请选择对应系统和芯片架构的安装包。',
     deviceTypes: ['desktop'],
     platforms: ['windows', 'mac-intel', 'mac-apple-silicon'],
   },
@@ -155,10 +153,9 @@ const clients: ClientItem[] = [
     summary: '适合 iPhone 与 iPad 使用，支持订阅导入和分流规则。',
     primary: '前往下载',
     link: 'https://apps.apple.com/us/app/shadowrocket/id932747118',
-    docs: '/knowledge#shadowrocket',
     badges: ['推荐', 'iOS', 'Mac (Apple Silicon)'],
     supportsScheme: true,
-    schemeBuilder: (url) => `shadowrocket://add/sub://${btoa(url)}`,
+    schemeBuilder: (url) => `shadowrocket://add/sub://${btoa(Array.from(new TextEncoder().encode(url), byte => String.fromCharCode(byte)).join(''))}`,
     importHint: '支持 Shadowrocket 一键导入，也可以通过二维码扫码添加。',
     compatibilityNote: 'Apple Silicon Mac 可直接运行对应 iOS 客户端。',
     deviceTypes: ['desktop', 'mobile'],
@@ -171,7 +168,6 @@ const clients: ClientItem[] = [
     summary: '适合偏好规则组与策略分流的 iPhone / iPad 用户，界面现代，配置能力强。',
     primary: '前往下载',
     link: 'https://apps.apple.com/us/app/stash-rule-based-proxy/id1596063349',
-    docs: '/knowledge#stash',
     badges: ['iOS', 'Mac (Apple Silicon)'],
     supportsScheme: true,
     schemeBuilder: (url) => `stash://install-config?url=${encodeURIComponent(url)}`,
@@ -187,7 +183,6 @@ const clients: ClientItem[] = [
     summary: '适合需要策略分流、自定义规则和脚本能力的 iOS 用户。',
     primary: '前往下载',
     link: 'https://apps.apple.com/us/app/quantumult-x/id1443988620',
-    docs: '/knowledge#quantumult-x',
     badges: ['iOS', 'Mac (Apple Silicon)'],
     supportsScheme: true,
     schemeBuilder: (url) => `quantumult-x:///update-resource?remote-resource=${encodeURIComponent(url)}`,
@@ -203,7 +198,6 @@ const clients: ClientItem[] = [
     summary: '适合需要高级分流、脚本与策略控制的 Apple 用户。',
     primary: '前往下载',
     link: 'https://apps.apple.com/us/app/surge-5/id1442620678',
-    docs: '/knowledge#surge',
     badges: ['iOS', 'Mac (Apple Silicon)'],
     supportsScheme: true,
     schemeBuilder: (url) => `surge:///install-config?url=${encodeURIComponent(url)}`,
@@ -219,7 +213,6 @@ const clients: ClientItem[] = [
     summary: '适合 Android 设备，支持订阅导入与常见代理协议。',
     primary: '前往下载',
     link: 'https://github.com/MatsuriDayo/NekoBoxForAndroid/releases',
-    docs: '/knowledge#nekobox',
     badges: ['Android'],
     importHint: 'Android 端推荐复制订阅或使用二维码扫码导入。',
     deviceTypes: ['mobile'],
@@ -229,14 +222,14 @@ const clients: ClientItem[] = [
 
 export function ClientsPage() {
   const { subscribe } = useAuth()
-  const subscribeUrl = subscribe?.subscribe_url ?? 'https://example.com/sub/demo-token'
+  const subscribeUrl = validSubscriptionUrl(subscribe?.subscribe_url)
   const [copied, setCopied] = useState(false)
   const [qrOpen, setQrOpen] = useState(false)
   const [qrDataUrl, setQrDataUrl] = useState('')
   const [qrLoading, setQrLoading] = useState(false)
   const [activeClient, setActiveClient] = useState<string | null>(null)
-  const [deviceType, setDeviceType] = useState<DeviceType>('desktop')
-  const [platformFilter, setPlatformFilter] = useState<PlatformFilter>('windows')
+  const [deviceType, setDeviceType] = useState<DeviceType>('mobile')
+  const [platformFilter, setPlatformFilter] = useState<PlatformFilter>('ios')
 
   const importGuide = useMemo(
     () => [
@@ -279,18 +272,9 @@ export function ClientsPage() {
     return `${mobilePlatformLabels[platformFilter as MobilePlatform]} 客户端`
   }, [deviceType, platformFilter])
 
-  useEffect(() => {
-    if (deviceType === 'desktop' && !['windows', 'mac-intel', 'mac-apple-silicon'].includes(platformFilter)) {
-      setPlatformFilter('windows')
-    }
-
-    if (deviceType === 'mobile' && !['ios', 'android'].includes(platformFilter)) {
-      setPlatformFilter('ios')
-    }
-  }, [deviceType, platformFilter])
 
   useEffect(() => {
-    if (!qrOpen) return
+    if (!qrOpen || !subscribeUrl) return
     let mounted = true
     setQrLoading(true)
     const isDark = document.documentElement.classList.contains('dark')
@@ -319,6 +303,7 @@ export function ClientsPage() {
   }, [qrOpen, subscribeUrl])
 
   async function copySubscribe() {
+    if (!subscribeUrl) return
     try {
       await copyText(subscribeUrl)
       setCopied(true)
@@ -336,10 +321,17 @@ export function ClientsPage() {
   }
 
   function handleSchemeImport(client: ClientItem) {
-    if (!client.schemeBuilder) return
+    if (!client.schemeBuilder || !subscribeUrl) return
     const url = client.schemeBuilder(subscribeUrl)
     window.location.href = url
     toast.success(`已尝试唤起 ${client.name} 导入`)
+  }
+
+  if (!subscribeUrl) {
+    return <div className='space-y-6'>
+      <PageHeader badge='订阅中心' title='订阅中心' />
+      <div className='px-4 lg:px-6'><Card><CardContent className='p-6 text-sm text-muted-foreground'>暂无可用订阅链接。</CardContent></Card></div>
+    </div>
   }
 
   return (
@@ -402,7 +394,7 @@ export function ClientsPage() {
                 <div className='flex flex-col gap-3 md:flex-row xl:justify-end'>
                   <div className='grid min-w-0 gap-2 md:w-[160px]'>
                     <div className='text-sm font-medium text-slate-700 dark:text-foreground'>设备类型</div>
-                    <Select value={deviceType} onValueChange={(value: DeviceType) => setDeviceType(value)}>
+                    <Select value={deviceType} onValueChange={(value: DeviceType) => { setDeviceType(value); setPlatformFilter(value === 'mobile' ? 'ios' : 'windows') }}>
                       <SelectTrigger className='w-full rounded-2xl border-slate-200/80 bg-white/90 shadow-sm dark:border-border/70 dark:bg-background/35'>
                         <SelectValue placeholder='选择设备类型' />
                       </SelectTrigger>
@@ -446,7 +438,7 @@ export function ClientsPage() {
                               <img
                                 src={client.image}
                                 alt={`${client.name} 图标`}
-                                className={`h-full w-full ${client.name === 'Clash' ? 'object-cover scale-110' : 'object-cover'}`}
+                                className={`h-full w-full ${client.name === 'clash-verge-rev' ? 'object-cover scale-110' : 'object-cover'}`}
                                 loading='lazy'
                               />
                             ) : (
@@ -522,14 +514,7 @@ export function ClientsPage() {
                             <IconQrcode className='size-4' />
                             扫码导入
                           </Button>
-                          {client.docs ? (
-                            <Button variant='ghost' className='min-h-10 w-full justify-center sm:w-auto sm:min-w-[124px]' asChild>
-                              <a href={client.docs}>
-                                <IconExternalLink className='size-4' />
-                                查看教程
-                              </a>
-                            </Button>
-                          ) : null}
+
                         </div>
                       </div>
                     </div>

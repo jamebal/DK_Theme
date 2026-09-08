@@ -1,476 +1,107 @@
-import { useMemo, useState } from 'react'
+import { memo, useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Activity, CircleOff, LayoutGrid, List, RefreshCw, ServerCog, Tags } from 'lucide-react'
-import { PageHeader } from '@/components/page-header'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+import { Activity, ArrowDown, ArrowUp, ChevronDown, Globe2, Radio, RefreshCw, Search } from 'lucide-react'
 import { getNodeStatuses } from '@/lib/api/services/node-status'
+import { createKomariIndex, matchNodeUuid, monitorForUuid, type NodeMonitor } from '@/lib/api/services/komari'
+import { useKomari } from '@/features/nodes/use-komari'
 import type { NodeStatus } from '@/lib/api/types'
 import { appConfig } from '@/lib/config'
-import { getFlagAsset, getRegionBadgeFromText, type FlagCode, type RegionBadge } from '@/lib/flags'
-import { formatDateTime } from '@/lib/format'
+import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 
-type NodeFilter = 'all' | 'online' | 'offline' | 'tagged'
-type NodeSort = 'status' | 'name' | 'rate' | 'checked'
-type NodeViewMode = 'card' | 'list'
-
-const filterOptions: Array<{ key: NodeFilter; label: string }> = [
-  { key: 'all', label: '全部节点' },
-  { key: 'online', label: '仅看可用' },
-  { key: 'offline', label: '仅看异常' },
-  { key: 'tagged', label: '仅看有标签' },
+type Filter = 'all' | 'online' | 'offline' | 'unknown'
+const filters: { value: Filter; label: string }[] = [
+  { value: 'all', label: '全部节点' }, { value: 'online', label: '在线' },
+  { value: 'offline', label: '离线' }, { value: 'unknown', label: '未知' },
 ]
-
-const sortOptions: Array<{ key: NodeSort; label: string }> = [
-  { key: 'status', label: '按状态排序' },
-  { key: 'name', label: '按名称排序' },
-  { key: 'rate', label: '按倍率排序' },
-  { key: 'checked', label: '按检测时间排序' },
-]
-
-function getProtocolLabel(node: NodeStatus) {
-  const protocol = (node.group ?? '').toLowerCase()
-
-  switch (protocol) {
-    case 'shadowsocks':
-      return 'Shadowsocks'
-    case 'vless':
-      return 'VLESS'
-    case 'vmess':
-      return 'VMess'
-    case 'trojan':
-      return 'Trojan'
-    case 'hysteria':
-      return 'Hysteria'
-    case 'hysteria2':
-      return 'Hysteria 2'
-    case 'tuic':
-      return 'TUIC'
-    case 'wireguard':
-      return 'WireGuard'
-    case 'ssh':
-      return 'SSH'
-    default:
-      return node.group ?? '未标注协议'
-  }
+function speed(value: number | null | undefined) {
+  if (value == null) return '—'
+  if (value < 1024) return `${Math.round(value)} B/s`
+  if (value < 1024 ** 2) return `${(value / 1024).toFixed(1)} KB/s`
+  return `${(value / 1024 ** 2).toFixed(1)} MB/s`
 }
-
-function getRegionBadge(node: NodeStatus): RegionBadge | null {
-  return getRegionBadgeFromText(`${node.location ?? ''} ${node.name}`)
+function Meter({ label, value }: { label: string; value: number | null | undefined }) {
+  return <div className='space-y-2'>
+    <div className='flex justify-between text-xs'><span className='text-muted-foreground'>{label}</span><span className='font-medium tabular-nums'>{value == null ? '—' : `${value.toFixed(1)}%`}</span></div>
+    <div role='meter' aria-label={label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={value == null ? undefined : Math.min(100, value)} aria-valuetext={value == null ? '暂无数据' : `${value.toFixed(1)}%`} className='h-1.5 overflow-hidden rounded-full bg-muted/70'>
+      <div className={cn('h-full rounded-full transition-all duration-500 motion-reduce:transition-none', (value ?? 0) >= 90 ? 'bg-rose-500' : (value ?? 0) >= 70 ? 'bg-amber-500' : 'bg-teal-500')} style={{ width: `${Math.min(100, value ?? 0)}%` }} />
+    </div>
+  </div>
 }
-
-function RegionFlag({ code, label, className = 'h-7 w-9' }: { code: FlagCode; label: string; className?: string }) {
-  return (
-    <span
-      className={`inline-flex shrink-0 overflow-hidden rounded-[8px] border border-black/8 bg-white/90 shadow-[0_8px_24px_rgba(15,23,42,0.08)] ring-1 ring-black/5 dark:border-white/10 dark:bg-white/8 dark:shadow-none dark:ring-white/10 ${className}`}
-      aria-label={label}
-      title={label}
-    >
-      <img src={getFlagAsset(code)} alt='' className='block h-full w-full object-cover' loading='lazy' aria-hidden='true' />
-    </span>
-  )
-}
-
-function stripLeadingFlagEmoji(name: string) {
-  return name.replace(/^[\u{1F1E6}-\u{1F1FF}]{2}\s*/u, '').trim()
-}
-
-function formatNodeDisplayName(name: string) {
-  return stripLeadingFlagEmoji(name)
-    .replace(/Ai/g, 'AI')
-    .replace(/(\d+(?:\.\d+)?)倍/g, '$1 倍')
-    .replace(/专线-(\d+)/g, '专线 $1')
-    .replace(/专线(\d+)-(\d+)/g, '专线 $1-$2')
-    .replace(/[_-]/g, ' · ')
-    .replace(/\s+/g, ' ')
-    .replace(/ · {2}/g, ' · ')
-    .trim()
-}
-
-function getNodeLocationText(node: NodeStatus) {
-  if (node.location?.trim()) return node.location.trim()
-  return getRegionBadge(node)?.label ?? '地区待补充'
-}
-
-function getTagBadgeClass(tag: string) {
-  const value = tag.toLowerCase()
-  if (value.includes('netflix')) {
-    return 'border-[#E50914]/20 bg-[#E50914]/10 text-[#E50914] dark:border-[#E50914]/35 dark:bg-[#E50914]/15 dark:text-[#ff6b72]'
-  }
-  if (value.includes('chatgpt')) {
-    return 'border-[#10A37F]/20 bg-[#10A37F]/10 text-[#10A37F] dark:border-[#10A37F]/35 dark:bg-[#10A37F]/15 dark:text-[#53d3b2]'
-  }
-  if (value.includes('claude')) {
-    return 'border-[#D97706]/20 bg-[#D97706]/10 text-[#D97706] dark:border-[#D97706]/35 dark:bg-[#D97706]/15 dark:text-[#f3aa4c]'
-  }
-  if (value.includes('youtube')) {
-    return 'border-[#FF0033]/20 bg-[#FF0033]/10 text-[#FF0033] dark:border-[#FF0033]/35 dark:bg-[#FF0033]/15 dark:text-[#ff6b86]'
-  }
-  if (value.includes('disney')) {
-    return 'border-[#113CCF]/20 bg-[#113CCF]/10 text-[#113CCF] dark:border-[#113CCF]/35 dark:bg-[#113CCF]/15 dark:text-[#7a97ff]'
-  }
-  if (value.includes('gemini')) {
-    return 'border-[#6D5EF5]/20 bg-[#6D5EF5]/10 text-[#6D5EF5] dark:border-[#6D5EF5]/35 dark:bg-[#6D5EF5]/15 dark:text-[#a99cff]'
-  }
-  if (value.includes('prime')) {
-    return 'border-[#00A8E1]/20 bg-[#00A8E1]/10 text-[#0077b6] dark:border-[#00A8E1]/35 dark:bg-[#00A8E1]/15 dark:text-[#73d9ff]'
-  }
-  if (value.includes('spotify')) {
-    return 'border-[#1DB954]/20 bg-[#1DB954]/10 text-[#1DB954] dark:border-[#1DB954]/35 dark:bg-[#1DB954]/15 dark:text-[#66ec97]'
-  }
-  if (value.includes('bbc') || value.includes('hbo') || value.includes('abema') || value.includes('wavve') || value.includes('niconico') || value.includes('tiktok')) {
-    return 'border-fuchsia-200 bg-fuchsia-50 text-fuchsia-700 dark:border-fuchsia-500/30 dark:bg-fuchsia-500/10 dark:text-fuchsia-300'
-  }
-  if (value.includes('低延迟') || value.includes('稳定') || value.includes('办公') || value.includes('游戏') || value.includes('低倍率') || value.includes('4k')) {
-    return 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-300'
-  }
-  return 'border-slate-200 bg-slate-50 text-slate-700 dark:border-border/70 dark:bg-background/60 dark:text-slate-200'
-}
-
-function formatRelativeCheckTime(timestamp?: number | null) {
-  if (!timestamp) return '暂无检测记录'
-
-  const diff = Math.max(0, Math.floor(Date.now() / 1000) - timestamp)
-  if (diff < 60) return '刚刚检测'
-  if (diff < 3600) return `${Math.floor(diff / 60)} 分钟前`
-  if (diff < 86400) return `${Math.floor(diff / 3600)} 小时前`
-  return `${Math.floor(diff / 86400)} 天前`
-}
-
-function getNodeStatusLabel(node: NodeStatus) {
-  return node.online ? '在线' : '异常'
-}
-
-function getNodeStatusSummary(node: NodeStatus) {
-  return node.online ? '节点可用，可正常分配到订阅。' : '节点当前异常，建议暂时切换其他节点。'
-}
-
-function formatRate(rate?: number | null) {
-  if (rate == null) return '--'
-  return `${rate.toFixed(2)} x`
-}
-
-function matchesFilter(node: NodeStatus, filter: NodeFilter) {
-  switch (filter) {
-    case 'online':
-      return node.online
-    case 'offline':
-      return !node.online
-    case 'tagged':
-      return Boolean(node.tags?.length)
-    default:
-      return true
-  }
-}
-
-function sortNodes(nodes: NodeStatus[], sortBy: NodeSort) {
-  return [...nodes].sort((a, b) => {
-    switch (sortBy) {
-      case 'name':
-        return a.name.localeCompare(b.name, 'zh-CN')
-      case 'rate':
-        return (a.rate ?? Number.POSITIVE_INFINITY) - (b.rate ?? Number.POSITIVE_INFINITY)
-      case 'checked':
-        return (b.last_checked ?? 0) - (a.last_checked ?? 0)
-      case 'status':
-      default:
-        if (a.online !== b.online) return a.online ? -1 : 1
-        return a.name.localeCompare(b.name, 'zh-CN')
-    }
-  })
-}
+const NodeCard = memo(function NodeCard({ node, monitor }: { node: NodeStatus; monitor: NodeMonitor | null }) {
+  const online = monitor ? monitor.online : node.online
+  const pings = monitor?.pings ?? []
+  const validPings = pings.filter(ping => ping.latency !== null && ping.loss !== 100)
+  const latency = monitor ? (validPings.length ? Math.round(validPings.reduce((sum, ping) => sum + ping.latency!, 0) / validPings.length) : null) : node.latency
+  const tags = [...new Set([...(node.tags ?? []), ...(monitor?.tags ?? [])])]
+  return <li className='flex min-w-0 flex-col overflow-hidden rounded-2xl border bg-card shadow-sm transition-shadow hover:shadow-md'>
+    <div className='flex items-start gap-3 p-5 pb-4'>
+      <div className='flex size-11 shrink-0 items-center justify-center rounded-xl border bg-muted/30 text-2xl'>{monitor?.region || <Globe2 className='size-5 text-muted-foreground' />}</div>
+      <div className='min-w-0 flex-1'><h2 className='break-words text-sm font-semibold leading-6'>{node.name}</h2><p className='mt-0.5 text-xs text-muted-foreground'>{[node.location, node.protocol?.toUpperCase(), node.rate != null ? `${node.rate}× 流量倍率` : null].filter(Boolean).join(' · ') || '订阅节点'}</p></div>
+      <span className={cn('mt-1 inline-flex shrink-0 items-center gap-1.5 rounded-full px-2 py-1 text-[11px] font-medium', online === true ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400' : online === false ? 'bg-rose-500/10 text-rose-700 dark:text-rose-400' : 'bg-muted text-muted-foreground')}><span className={cn('size-1.5 rounded-full', online === true ? 'bg-emerald-500' : online === false ? 'bg-rose-500' : 'bg-muted-foreground')} />{online === true ? '在线' : online === false ? '离线' : '未知'}</span>
+    </div>
+    {tags.length > 0 && <div className='flex flex-wrap gap-1.5 px-5 pb-4'>{tags.map(tag => <span key={tag} className='rounded-md bg-muted/50 px-2 py-1 text-[10px] text-muted-foreground'>{tag}</span>)}</div>}
+    <div className='mx-5 grid grid-cols-3 gap-3 rounded-xl bg-muted/30 p-3.5'>
+      <div><p className='mb-2 flex items-center gap-1 text-[11px] text-muted-foreground'><Activity className='size-3' />{monitor ? '探测均延迟' : '延迟'}</p><p className='text-sm font-semibold tabular-nums'>{latency == null ? '—' : <>{latency}<span className='ml-1 text-[10px] font-normal text-muted-foreground'>ms</span></>}</p></div>
+      <div><p className='mb-2 flex items-center gap-1 text-[11px] text-muted-foreground'><ArrowUp className='size-3 text-teal-500' />上行速率</p><p className='text-sm font-semibold tabular-nums'>{speed(monitor?.upload)}</p></div>
+      <div><p className='mb-2 flex items-center gap-1 text-[11px] text-muted-foreground'><ArrowDown className='size-3 text-sky-500' />下行速率</p><p className='text-sm font-semibold tabular-nums'>{speed(monitor?.download)}</p></div>
+    </div>
+    <div className='grid grid-cols-3 gap-4 p-5'><Meter label='CPU' value={monitor?.cpu} /><Meter label='内存' value={monitor?.memory} /><Meter label='磁盘' value={monitor?.disk} /></div>
+    {pings.length > 0 && <div className='mt-auto border-t bg-muted/15 px-5 py-3'>
+      <details className='group'>
+        <summary className='flex cursor-pointer list-none items-center justify-between text-xs font-medium [&::-webkit-details-marker]:hidden'>线路质量 <span className='flex items-center gap-2 text-[10px] font-normal text-muted-foreground'>{pings.length} 个探测点<ChevronDown className='size-3.5 transition-transform group-open:rotate-180' /></span></summary>
+        <div className='mt-3 space-y-2.5'>{pings.map(ping => <div key={ping.id} className='grid grid-cols-[1fr_auto_auto] items-center gap-3 text-[11px]'><span className='truncate text-muted-foreground'>{ping.name}</span><span className='tabular-nums'>{ping.loss === 100 ? '超时' : ping.latency === null ? '—' : `${ping.latency} ms`}</span><span className={cn('w-20 text-right tabular-nums', (ping.loss ?? 0) > 5 ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground')}>{ping.loss == null ? '丢包未知' : `${ping.loss.toFixed(1)}% 丢包`}</span></div>)}</div>
+        <p className='mt-3 text-[10px] leading-relaxed text-muted-foreground'>延迟为主机到探测点的测量值，不代表你的客户端连接延迟。</p>
+      </details>
+    </div>}
+  </li>
+}, (previous, next) => previous.node === next.node && JSON.stringify(previous.monitor && { ...previous.monitor, checkedAt: null, uptime: null }) === JSON.stringify(next.monitor && { ...next.monitor, checkedAt: null, uptime: null }))
 
 export function NodeStatusPage() {
-  const [keyword, setKeyword] = useState('')
-  const [filter, setFilter] = useState<NodeFilter>('all')
-  const [sortBy, setSortBy] = useState<NodeSort>('status')
-  const [viewMode, setViewMode] = useState<NodeViewMode>('card')
-
-  const nodeStatusQuery = useQuery({
-    queryKey: ['node-status'],
-    queryFn: getNodeStatuses,
-    refetchInterval: appConfig.nodeStatus.refreshIntervalMs,
-    refetchIntervalInBackground: true,
-  })
-
-  const nodes = useMemo(() => sortNodes(nodeStatusQuery.data ?? [], sortBy), [nodeStatusQuery.data, sortBy])
-  const search = keyword.trim().toLowerCase()
-  const filteredNodes = useMemo(
-    () =>
-      nodes.filter((node) => {
-        const text = [formatNodeDisplayName(node.name), getNodeLocationText(node), getProtocolLabel(node), node.network ?? '', ...(node.tags ?? [])]
-          .filter(Boolean)
-          .join(' ')
-          .toLowerCase()
-        return matchesFilter(node, filter) && (!search || text.includes(search))
-      }),
-    [filter, nodes, search],
-  )
-
-  const onlineCount = nodes.filter((node) => node.online).length
-  const offlineCount = nodes.filter((node) => !node.online).length
-  const taggedCount = nodes.filter((node) => node.tags?.length).length
-
-  return (
-    <div className='space-y-8'>
-      <PageHeader
-        badge='节点状态'
-        title='当前订阅节点真实状态'
-        actions={<Badge variant='outline' className='rounded-full border-slate-200/80 bg-white/80 dark:border-border/70 dark:bg-background/35'>每 {Math.round(appConfig.nodeStatus.refreshIntervalMs / 1000)} 秒自动刷新</Badge>}
-      />
-
-      <div className='px-4 lg:px-6'>
-        <Card className='border-slate-200/90 bg-white/96 shadow-lg shadow-slate-200/60 dark:border-border/70 dark:bg-card dark:shadow-none'>
-          <CardContent className='grid gap-4 p-6 md:grid-cols-2 xl:grid-cols-4'>
-            <div className='rounded-3xl border border-slate-200/80 bg-slate-50/85 p-5 dark:border-border/70 dark:bg-background/35'>
-              <div className='flex items-center gap-2 text-sm text-slate-500 dark:text-muted-foreground'><ServerCog className='size-4' />节点总数</div>
-              <div className='mt-3 text-2xl font-semibold text-slate-900 dark:text-foreground'>{nodes.length}</div>
-            </div>
-            <div className='rounded-3xl border border-slate-200/80 bg-slate-50/85 p-5 dark:border-border/70 dark:bg-background/35'>
-              <div className='flex items-center gap-2 text-sm text-slate-500 dark:text-muted-foreground'><Activity className='size-4' />在线节点</div>
-              <div className='mt-3 text-2xl font-semibold text-emerald-600 dark:text-emerald-400'>{onlineCount}</div>
-            </div>
-            <div className='rounded-3xl border border-slate-200/80 bg-slate-50/85 p-5 dark:border-border/70 dark:bg-background/35'>
-              <div className='flex items-center gap-2 text-sm text-slate-500 dark:text-muted-foreground'><CircleOff className='size-4' />异常节点</div>
-              <div className='mt-3 text-2xl font-semibold text-rose-600 dark:text-rose-400'>{offlineCount}</div>
-            </div>
-            <div className='rounded-3xl border border-slate-200/80 bg-slate-50/85 p-5 dark:border-border/70 dark:bg-background/35'>
-              <div className='flex items-center gap-2 text-sm text-slate-500 dark:text-muted-foreground'><Tags className='size-4' />有标签节点</div>
-              <div className='mt-3 text-2xl font-semibold text-slate-900 dark:text-foreground'>{taggedCount}</div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className='px-4 lg:px-6'>
-        <div>
-          <Card className='border-slate-200/90 bg-white/96 shadow-lg shadow-slate-200/60 dark:border-border/70 dark:bg-card dark:shadow-none'>
-            <CardHeader className='space-y-4'>
-              <div className='flex flex-wrap items-start justify-between gap-3'>
-                <div>
-                  <CardTitle>节点列表</CardTitle>
-                  <CardDescription>支持按真实字段进行搜索、筛选、排序，并可切换列表式与卡片式查看。</CardDescription>
-                </div>
-                <div className='grid w-full gap-2 sm:w-auto sm:grid-cols-[auto_auto] sm:items-center sm:justify-end'>
-                  <div className='inline-grid min-w-0 grid-cols-2 items-center gap-1 rounded-2xl border border-slate-200 bg-white/90 p-1 sm:min-w-[190px] dark:border-border/70 dark:bg-transparent'>
-                    <Button
-                      variant={viewMode === 'card' ? 'default' : 'ghost'}
-                      size='sm'
-                      className='h-9 w-full justify-center gap-1.5 rounded-xl px-3 whitespace-nowrap'
-                      onClick={() => setViewMode('card')}
-                    >
-                      <LayoutGrid className='size-4 shrink-0' />卡片式
-                    </Button>
-                    <Button
-                      variant={viewMode === 'list' ? 'default' : 'ghost'}
-                      size='sm'
-                      className='h-9 w-full justify-center gap-1.5 rounded-xl px-3 whitespace-nowrap'
-                      onClick={() => setViewMode('list')}
-                    >
-                      <List className='size-4 shrink-0' />列表式
-                    </Button>
-                  </div>
-                  <Button
-                    variant='outline'
-                    className='h-11 w-full justify-center whitespace-nowrap rounded-full bg-white/90 px-4 sm:w-auto sm:shrink-0 dark:bg-transparent'
-                    onClick={() => nodeStatusQuery.refetch()}
-                  >
-                    <RefreshCw className='size-4 shrink-0' />立即刷新
-                  </Button>
-                </div>
-              </div>
-
-              <div className='grid gap-3 lg:grid-cols-[minmax(0,1fr)_220px]'>
-                <Input
-                  value={keyword}
-                  onChange={(event) => setKeyword(event.target.value)}
-                  placeholder='搜索节点名称、协议类型或标签'
-                  className='h-11 rounded-2xl border-slate-200/80 bg-white/90 shadow-sm dark:border-border/70 dark:bg-background/35'
-                />
-                <Select value={sortBy} onValueChange={(value) => setSortBy(value as NodeSort)}>
-                  <SelectTrigger className='h-11 w-full rounded-2xl border-slate-200/80 bg-white/90 shadow-sm dark:border-border/70 dark:bg-background/35'>
-                    <SelectValue placeholder='选择排序方式' />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {sortOptions.map((item) => (
-                      <SelectItem key={item.key} value={item.key}>{item.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className='flex flex-wrap gap-2'>
-                {filterOptions.map((item) => (
-                  <Button
-                    key={item.key}
-                    variant={filter === item.key ? 'default' : 'outline'}
-                    className={filter === item.key ? 'rounded-2xl shadow-sm' : 'rounded-2xl border-slate-200/80 bg-white/90 shadow-sm dark:border-border/70 dark:bg-background/35'}
-                    onClick={() => setFilter(item.key)}
-                  >
-                    {item.label}
-                  </Button>
-                ))}
-              </div>
-            </CardHeader>
-
-            <CardContent className='space-y-3'>
-              {nodeStatusQuery.isError ? (
-                <div className='rounded-3xl border border-rose-200 bg-rose-50/80 p-6 dark:border-rose-500/30 dark:bg-rose-500/10'>
-                  <div className='text-base font-medium text-rose-700 dark:text-rose-300'>节点状态加载失败</div>
-                  <div className='mt-2 text-sm text-rose-600/90 dark:text-rose-200/80'>请检查节点状态接口是否可用，或稍后重新加载。</div>
-                  <div className='mt-4'>
-                    <Button variant='outline' className='rounded-full bg-white/90 dark:bg-transparent' onClick={() => nodeStatusQuery.refetch()}>
-                      重新加载
-                    </Button>
-                  </div>
-                </div>
-              ) : nodeStatusQuery.isLoading ? (
-                <div className='rounded-3xl border border-dashed border-slate-200 bg-slate-50/70 p-6 text-sm text-muted-foreground dark:border-border/70 dark:bg-background/35'>
-                  正在获取节点状态…
-                </div>
-              ) : filteredNodes.length ? (
-                viewMode === 'card' ? (
-                  <div className='grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4'>
-                    {filteredNodes.map((node) => {
-                      const regionBadge = getRegionBadge(node)
-                      return (
-                        <div
-                          key={String(node.id)}
-                          className={[
-                            'relative flex h-full min-h-[198px] flex-col rounded-2xl border bg-slate-50/80 p-3.5 shadow-sm transition-all duration-200 ease-out hover:-translate-y-0.5 hover:shadow-md dark:bg-background/35',
-                            node.online
-                              ? 'border-emerald-200/90 hover:border-emerald-300 dark:border-emerald-500/30 dark:hover:border-emerald-400/50'
-                              : 'border-rose-200/90 hover:border-rose-300 dark:border-rose-500/30 dark:hover:border-rose-400/50',
-                          ].join(' ')}
-                        >
-                          <div className='absolute right-4 top-4'>
-                            <Badge
-                              variant={node.online ? 'success' : 'destructive'}
-                              className={[
-                                'shadow-sm',
-                                node.online
-                                  ? 'ring-1 ring-emerald-200/80 dark:ring-emerald-400/20'
-                                  : 'ring-1 ring-rose-200/80 dark:ring-rose-400/20',
-                              ].join(' ')}
-                            >
-                              {getNodeStatusLabel(node)}
-                            </Badge>
-                          </div>
-
-                          <div className='flex items-start gap-3 pr-16'>
-                            {regionBadge ? <RegionFlag code={regionBadge.code} label={regionBadge.label} className='h-[34px] w-[44px]' /> : null}
-                            <div className='min-w-0'>
-                              <div className='line-clamp-2 text-[15px] font-semibold leading-5 text-slate-900 dark:text-foreground'>
-                                {formatNodeDisplayName(node.name)}
-                              </div>
-                              <div className='mt-1 text-xs text-muted-foreground'>
-                                {getNodeLocationText(node)}
-                                <span className='mx-1'>·</span>
-                                {getProtocolLabel(node)}
-                                {node.network ? <><span className='mx-1'>·</span>{node.network}</> : null}
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className='mt-3 flex flex-wrap gap-2'>
-                            {regionBadge ? <Badge variant='secondary'>{regionBadge.label}</Badge> : null}
-                            <div className='inline-flex items-center gap-2 rounded-xl border border-slate-200/80 bg-white/90 px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm dark:border-border/70 dark:bg-background/60 dark:text-foreground'>
-                              <span className='text-[10px] uppercase tracking-[0.14em] text-muted-foreground'>Rate</span>
-                              <span className='text-sm font-semibold text-slate-900 dark:text-foreground'>{formatRate(node.rate)}</span>
-                            </div>
-                          </div>
-
-                          <div className={[
-                            'mt-3 rounded-xl border bg-white/80 px-3 py-2 text-[11px] text-muted-foreground dark:bg-background/60',
-                            node.online
-                              ? 'border-emerald-100/90 dark:border-emerald-500/20'
-                              : 'border-rose-100/90 dark:border-rose-500/20',
-                          ].join(' ')}>
-                            <div>{formatRelativeCheckTime(node.last_checked)}</div>
-                            <div className='mt-1'>{formatDateTime(node.last_checked)}</div>
-                          </div>
-
-                          <div className='mt-3 flex min-h-7 flex-wrap gap-1.5'>
-                            {node.tags?.length ? (
-                              node.tags.map((tag) => (
-                                <Badge key={`${node.id}-${tag}`} variant='outline' className={getTagBadgeClass(tag)}>{tag}</Badge>
-                              ))
-                            ) : (
-                              <span className='text-xs text-muted-foreground'>暂无标签</span>
-                            )}
-                          </div>
-
-                          <div className='mt-auto pt-3 text-[11px] text-muted-foreground'>
-                            {getNodeStatusSummary(node)}
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                ) : (
-                  filteredNodes.map((node) => {
-                    const regionBadge = getRegionBadge(node)
-                    return (
-                      <div
-                        key={String(node.id)}
-                        className='rounded-2xl border border-slate-200/80 bg-slate-50/60 p-4 dark:border-border/70 dark:bg-background/30'
-                      >
-                        <div className='flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between'>
-                          <div className='space-y-2.5'>
-                            <div className='flex flex-wrap items-center gap-2'>
-                              {regionBadge ? <RegionFlag code={regionBadge.code} label={regionBadge.label} className='h-[36px] w-[48px]' /> : null}
-                              <div className='break-words text-lg font-semibold text-slate-900 dark:text-foreground'>{formatNodeDisplayName(node.name)}</div>
-                              {regionBadge ? <Badge variant='secondary'>{regionBadge.label}</Badge> : null}
-                              <Badge variant={node.online ? 'success' : 'destructive'}>{getNodeStatusLabel(node)}</Badge>
-                              <Badge variant='outline'>倍率 {formatRate(node.rate)}</Badge>
-                            </div>
-
-                            <div className='flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground'>
-                              <span>{getNodeLocationText(node)}</span>
-                              <span className='hidden sm:inline'>·</span>
-                              <span>协议：{getProtocolLabel(node)}</span>
-                              {node.network ? <><span className='hidden sm:inline'>·</span><span>线路：{node.network}</span></> : null}
-                              <span className='hidden sm:inline'>·</span>
-                              <span>最后检测：{formatRelativeCheckTime(node.last_checked)}</span>
-                              <span className='hidden sm:inline'>·</span>
-                              <span>{formatDateTime(node.last_checked)}</span>
-                            </div>
-
-                            {node.tags?.length ? (
-                              <div className='flex flex-wrap gap-2'>
-                                {node.tags.map((tag) => <Badge key={`${node.id}-${tag}`} variant='outline' className={getTagBadgeClass(tag)}>{tag}</Badge>)}
-                              </div>
-                            ) : (
-                              <div className='text-sm text-muted-foreground'>暂无标签</div>
-                            )}
-                          </div>
-
-                          <div className='w-full text-sm text-muted-foreground xl:w-auto xl:max-w-56 xl:text-right'>
-                            {getNodeStatusSummary(node)}
-                          </div>
-                        </div>
-                      </div>
-                    )
-                  })
-                )
-              ) : (
-                <div className='rounded-3xl border border-dashed border-slate-200 bg-slate-50/70 p-6 text-sm text-muted-foreground dark:border-border/70 dark:bg-background/35'>
-                  当前筛选条件下没有匹配的节点，试试清空搜索词或切换筛选条件。
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+  const [search, setSearch] = useState('')
+  const [filter, setFilter] = useState<Filter>('all')
+  const [now, setNow] = useState(Date.now)
+  useEffect(() => {
+    let timer: number | undefined
+    const start = () => {
+      window.clearInterval(timer)
+      if (document.visibilityState !== 'hidden') timer = window.setInterval(() => setNow(Date.now()), 15000)
+    }
+    const visibilityChanged = () => { start(); if (document.visibilityState !== 'hidden') setNow(Date.now()) }
+    start()
+    document.addEventListener('visibilitychange', visibilityChanged)
+    return () => { window.clearInterval(timer); document.removeEventListener('visibilitychange', visibilityChanged) }
+  }, [])
+  const query = useQuery({ queryKey: ['node-status'], queryFn: getNodeStatuses, refetchInterval: appConfig.nodeStatus.refreshIntervalMs })
+  const monitoring = useKomari()
+  const metadata = monitoring.data?.nodes
+  const associations = useMemo(() => {
+    const index = createKomariIndex(metadata ?? {})
+    return (query.data ?? []).map(node => ({ node, uuid: matchNodeUuid(node.name, index) }))
+  }, [query.data, metadata])
+  const unavailable = monitoring.isError || (!appConfig.enableMock && monitoring.dataUpdatedAt > 0 && now - monitoring.dataUpdatedAt > 120000)
+  const rows = useMemo(() => associations.map(({ node, uuid }) => {
+    const monitor = uuid && monitoring.data ? monitorForUuid(uuid, monitoring.data, now) : null
+    // Cached measurements must not continue to look live after a failed refresh.
+    if (monitor && unavailable) Object.assign(monitor, { online: null, stale: true, cpu: null, memory: null, disk: null, upload: null, download: null, uptime: null, pings: [] })
+    return { node, monitor, state: (monitor ? monitor.online : node.online) === true ? 'online' : (monitor ? monitor.online : node.online) === false ? 'offline' : 'unknown' }
+  }), [associations, monitoring.data, now, unavailable])
+  const counts = { all: rows.length, online: rows.filter(row => row.state === 'online').length, offline: rows.filter(row => row.state === 'offline').length, unknown: rows.filter(row => row.state === 'unknown').length }
+  const visible = rows.filter(({ node, monitor, state }) => (filter === 'all' || state === filter) && [node.name, node.location, node.protocol, ...(node.tags ?? []), ...(monitor?.tags ?? [])].join(' ').toLowerCase().includes(search.trim().toLowerCase()))
+  const refreshing = query.isFetching || monitoring.isFetching
+  return <div className='mx-auto w-full max-w-7xl space-y-6 px-4 pb-8 lg:px-8'>
+    <header className='flex flex-wrap items-center justify-between gap-4'>
+      <div><div className='mb-2 flex items-center gap-2 text-[10px] font-medium tracking-[0.2em] text-muted-foreground'><Radio className='size-3.5 text-teal-500' />NETWORK STATUS</div><h1 className='text-2xl font-semibold tracking-tight'>节点状态</h1><p className='mt-2 text-sm text-muted-foreground'>连接每一处，状态一目了然。</p></div>
+      <div className='flex items-center gap-3'><span className='hidden text-xs text-muted-foreground sm:block'>{appConfig.enableMock ? '演示模式' : monitoring.connection === 'connected' ? '实时连接 · 每 1 秒更新' : monitoring.connection === 'paused' ? '监控已暂停' : '连接中 · 低频同步'}</span><Button size='sm' variant='outline' className='rounded-lg' disabled={refreshing} onClick={() => { void query.refetch(); if (!appConfig.enableMock) void monitoring.refetch() }}><RefreshCw className={cn('size-3.5', refreshing && 'animate-spin motion-reduce:animate-none')} />刷新状态</Button></div>
+    </header>
+    {unavailable && <p role='alert' className='rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-xs leading-5 text-amber-700 dark:text-amber-400'>Komari 监控暂时无法连接，已保留订阅节点。请稍后刷新状态。</p>}
+    {query.isError && <p role='alert' className='rounded-xl border border-destructive/20 bg-destructive/5 p-4 text-sm text-destructive'>节点列表{query.data ? '刷新' : '加载'}失败，请重试。{query.data ? '当前显示上次获取的列表。' : ''}</p>}
+    <div className='flex flex-col justify-between gap-4 sm:flex-row sm:items-center'>
+      <div className='flex w-fit max-w-full gap-1 overflow-x-auto rounded-xl bg-muted/50 p-1' role='group' aria-label='按节点状态筛选'>{filters.map(item => <button key={item.value} onClick={() => setFilter(item.value)} aria-pressed={filter === item.value} className={cn('shrink-0 rounded-lg px-3 py-2 text-xs transition-colors', filter === item.value ? 'bg-card font-medium shadow-sm' : 'text-muted-foreground hover:text-foreground')}>{item.label}<span className='ml-1.5 text-[10px] tabular-nums opacity-60'>{counts[item.value]}</span></button>)}</div>
+      <div className='relative sm:w-64'><Search className='pointer-events-none absolute left-3 top-3 size-4 text-muted-foreground' /><Input className='h-10 rounded-xl bg-card pl-9' aria-label='搜索节点' placeholder='搜索节点、地区、协议…' value={search} onChange={event => setSearch(event.target.value)} /></div>
     </div>
-  )
+    {query.isPending ? <div role='status' aria-label='正在加载节点' className='grid gap-4 md:grid-cols-2 xl:grid-cols-3'>{Array.from({ length: 6 }, (_, index) => <div key={index} className='h-64 animate-pulse rounded-2xl border bg-muted/30 motion-reduce:animate-none' />)}</div> : visible.length ? <ul className='grid items-start gap-4 md:grid-cols-2 xl:grid-cols-3'>{visible.map(({ node, monitor }) => <NodeCard key={`${node.protocol ?? ''}-${node.id}`} node={node} monitor={monitor} />)}</ul> : !query.isError && <div className='rounded-2xl border border-dashed py-16 text-center'><Search className='mx-auto mb-4 size-7 text-muted-foreground' /><p className='text-sm font-medium'>{rows.length ? '没有找到匹配的节点' : '暂无可用节点'}</p><p className='mt-2 text-xs text-muted-foreground'>{rows.length ? '试试其他关键词，或切换状态筛选。' : '订阅节点加载后，将在这里展示连接状态。'}</p>{(search || filter !== 'all') && <Button className='mt-4' size='sm' variant='outline' onClick={() => { setSearch(''); setFilter('all') }}>清除筛选</Button>}</div>}
+    <footer className='flex flex-wrap items-center justify-between gap-2 text-[10px] leading-5 text-muted-foreground'><span>在线状态反映主机运行情况，实际连接质量请以客户端为准。</span><span>{!appConfig.enableMock && monitoring.isPending ? '正在同步 Komari…' : monitoring.dataUpdatedAt ? `最近同步 ${new Date(monitoring.dataUpdatedAt).toLocaleTimeString('zh-CN', { hour12: false })}` : '节点状态总览'}</span></footer>
+  </div>
 }

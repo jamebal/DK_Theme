@@ -26,14 +26,12 @@ function normalizeNodeStatus(item: RawNodeStatus, index: number): NodeStatus {
     toStringValue(item.host) ??
     `节点 ${index + 1}`
 
-  const statusValue = item.online ?? item.is_online ?? item.available ?? item.status
-  const online = typeof statusValue === 'boolean'
-    ? statusValue
-    : typeof statusValue === 'number'
-      ? statusValue === 1 || statusValue === 200
-      : typeof statusValue === 'string'
-        ? ['1', 'true', 'online', 'available', 'ok', 'healthy'].includes(statusValue.toLowerCase())
-        : true
+  // Generic status/available fields may mean enabled, not live health.
+  const statusValue = item.online ?? item.is_online
+  const online = statusValue === true || statusValue === 1 || statusValue === '1' || statusValue === 'online'
+    ? true
+    : statusValue === false || statusValue === 0 || statusValue === '0' || statusValue === 'offline'
+      ? false : null
 
   const latency =
     toNumber(item.latency) ??
@@ -54,7 +52,7 @@ function normalizeNodeStatus(item: RawNodeStatus, index: number): NodeStatus {
     toNumber(item.last_checked) ??
     toNumber(item.lastCheckAt) ??
     toNumber(item.updated_at) ??
-    Math.floor(Date.now() / 1000)
+    null
 
   const tags = Array.isArray(item.tags)
     ? item.tags.map((entry) => toStringValue(entry)).filter(Boolean) as string[]
@@ -69,6 +67,7 @@ function normalizeNodeStatus(item: RawNodeStatus, index: number): NodeStatus {
     tags,
     rate: toNumber(item.rate),
     online,
+    protocol: toStringValue(item.type) ?? toStringValue(item.protocol),
     latency,
     load,
     loss,
