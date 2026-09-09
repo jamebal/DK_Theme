@@ -30,7 +30,53 @@ VITE_NODE_STATUS_REFRESH_INTERVAL_MS=60000
 
 本地演示可显式设置 `VITE_ENABLE_MOCK=true`，使用任意合法邮箱与至少六位密码。演示数据不代表真实服务状态。现有 `.env` 的站点名和后端地址优先于默认配置，修改后需重新构建。
 
-订阅页恢复原客户端卡片、下载、复制、扫码及 URL Scheme 导入，设备默认移动端（iOS）。订阅 URL 保持原样，由后端按客户端请求识别格式。当前 API 未提供格式能力清单，因此没有加入未经验证的 Loon、Sing-box 入口，也没有使用第三方订阅转换服务。
+订阅页提供客户端卡片、下载、复制、扫码及 URL Scheme 导入，设备默认移动端（iOS）。订阅 URL 保持原样，由后端按客户端请求识别格式。塔台作为独立订阅工具提供下载入口，需要转换时由用户在应用中操作。
+
+### 应用下载账号（Apple ID）
+
+每个应用都可以单独配置下载账号，包括塔台和客户端列表中的应用。账号必须保存在后端数据库或网站静态目录之外的私有配置中，不能放在 `public/`、`dist/` 或 `VITE_*` 环境变量中。
+
+无需修改 Xboard 后端，可通过 Nginx `auth_request` 复用 `/api/v1/user/info` 的登录鉴权，再读取网站目录之外的私有账号文件。完整步骤见 [Nginx 下载账号部署说明](docs/app-accounts-nginx.md)，附带 [Nginx 配置](deploy/nginx/app-accounts.conf) 和 [账号空模板](deploy/app-accounts.example.json)。必须先确认真实 Xboard 对无效令牌返回 HTTP 401/403，不能返回带错误 JSON 的 HTTP 200。
+
+前端默认关闭账号展示。配置好 Nginx 后，在 `.env.production.local` 中设置接口路径并重新构建：
+
+```dotenv
+VITE_APP_ACCOUNTS_API_PATH=/api/v1/user/app-accounts
+```
+
+以上路径由附带的 Nginx 配置提供，并非 Xboard 内置接口。前端复用现有 API 客户端发送 `Authorization`，Nginx 将令牌交给 Xboard 验证，通过后返回私有 JSON。成功响应设置 `Cache-Control: private, no-store`，CDN 禁止缓存该接口。私有 JSON 文件结构如下：
+
+```json
+{
+  "data": {
+    "塔台": {
+      "appleId": "tower-download@example.com",
+      "password": "replace-with-download-password"
+    },
+    "Shadowrocket": {
+      "appleId": "shadowrocket-download@example.com",
+      "password": "replace-with-download-password"
+    }
+  }
+}
+```
+
+应用名称区分大小写，可用键为：`塔台`、`Shadowrocket`、`Surge`、`sing-box`、`Egern`、`clash-mi`、`Quantumult X`、`Stash`、`v2rayN`、`clash-verge-rev`、`NekoBox`。两项都填写非空字符串才显示账号区域；删除对应应用、留空任一项或返回 `{"data":{}}` 即可隐藏。密码默认隐藏，支持显示和复制。接口未配置、响应格式错误或加载失败时隐藏账号区域；演示模式不会请求账号接口。
+
+修改服务器私有账号文件无需重新构建，刷新页面获取最新值。前端不将账号写入本地持久存储，退出登录清理查询缓存。
+
+**从旧静态文件方案迁移**：从生产静态目录删除旧 `app-accounts.json`，清除 CDN 缓存，并封禁旧路径（部署在子目录时也要封禁对应路径）：
+
+```nginx
+location = /app-accounts.json {
+    return 404;
+}
+location = /public/app-accounts.json {
+    return 404;
+}
+```
+
+若旧文件已经填写真实账号并上线，应更换对应密码。登录鉴权只能限制未授权访问，获得展示权限的用户仍能复制账号。上线前验证：不带令牌、无效令牌、过期令牌均无法获取账号；有效授权用户可以获取；旧静态路径不再返回任何账号数据。
 
 节点缺少明确 `online` / `is_online` 时显示未知，普通 `status` 字段不当作实时在线状态。流量按已返回的上传和下载记录汇总，可能存在统计延迟或不完整月份，不推断缺失记录。
 

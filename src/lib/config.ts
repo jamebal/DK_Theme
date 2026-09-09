@@ -2,6 +2,7 @@ export const appConfig = {
   appName: import.meta.env.VITE_APP_NAME || 'Moss',
   apiBaseUrl: import.meta.env.VITE_API_BASE_URL || '/',
   enableMock: String(import.meta.env.VITE_ENABLE_MOCK ?? 'false') === 'true',
+  appAccountsApiPath: import.meta.env.VITE_APP_ACCOUNTS_API_PATH || '',
   nodeStatus: {
     komariWsUrl: import.meta.env.VITE_KOMARI_WS_URL || '',
     komariApiUrl: import.meta.env.VITE_KOMARI_API_URL || '/api/komari/rpc2',

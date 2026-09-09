@@ -8,10 +8,10 @@ import {
   IconExternalLink,
   IconLink,
   IconQrcode,
-  IconSparkles,
 } from '@tabler/icons-react'
 import { toast } from 'sonner'
 import { PageHeader } from '@/components/page-header'
+import { AppDownloadAccount } from '@/components/app-download-account'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -219,7 +219,7 @@ const clients: ClientItem[] = [
     primary: '前往下载',
     link: 'https://apps.apple.com/us/app/sing-box-mt/id6785326793',
     badges: ['免费', 'iOS'],
-    importHint: '复制订阅链接后，在客户端内添加远程配置，请使用 sing-box 格式的订阅。',
+    importHint: '复制订阅链接后，在客户端内添加远程配置，请使用 sing-box 格式的订阅。需要转换格式时，可使用上方的塔台工具。',
     deviceTypes: ['mobile'],
     platforms: ['ios'],
   },
@@ -231,7 +231,7 @@ const clients: ClientItem[] = [
     primary: '前往下载',
     link: 'https://apps.apple.com/us/app/egern/id1616105820',
     badges: ['免费', 'iOS'],
-    importHint: '复制订阅链接后，在客户端内手动添加，请使用 Egern 支持的订阅格式。',
+    importHint: '复制订阅链接后，在客户端内手动添加，请使用 Egern 支持的订阅格式。需要转换格式时，可使用上方的塔台工具。',
     deviceTypes: ['mobile'],
     platforms: ['ios'],
   },
@@ -243,7 +243,7 @@ const clients: ClientItem[] = [
     primary: '前往下载',
     link: 'https://apps.apple.com/us/app/clash-mi/id6744321968',
     badges: ['免费', 'iOS'],
-    importHint: '复制订阅链接后，在客户端内添加远程配置，请使用 Clash 格式的订阅。',
+    importHint: '复制订阅链接后，在客户端内添加远程配置，请使用 Clash 格式的订阅。需要转换格式时，可使用上方的塔台工具。',
     deviceTypes: ['mobile'],
     platforms: ['ios'],
   },
@@ -274,15 +274,6 @@ export function ClientsPage() {
   const [activeClient, setActiveClient] = useState<string | null>(null)
   const [deviceType, setDeviceType] = useState<DeviceType>('mobile')
   const [platformFilter, setPlatformFilter] = useState<PlatformFilter>('ios')
-
-  const importGuide = useMemo(
-    () => [
-      '先选设备类型。',
-      '再选系统平台。',
-      '按需导入订阅。',
-    ],
-    [],
-  )
 
   const platformOptions = useMemo(() => {
     if (deviceType === 'desktop') {
@@ -414,19 +405,34 @@ export function ClientsPage() {
         <div className='grid gap-6 px-4 lg:px-6'>
           <Card className='border-slate-200/90 bg-white/96 shadow-lg shadow-slate-200/60 dark:border-border/70 dark:bg-card dark:shadow-none'>
             <CardHeader>
-              <CardTitle>快速导入</CardTitle>
-              <CardDescription>选择设备后导入订阅。</CardDescription>
+              <CardTitle>订阅工具</CardTitle>
+              <CardDescription>需要转换订阅格式时，可使用以下工具。</CardDescription>
             </CardHeader>
-            <CardContent className='grid gap-3 md:grid-cols-3'>
-              {importGuide.map((item) => (
-                <div
-                  key={item}
-                  className='flex items-start gap-3 rounded-2xl border border-slate-200/90 bg-slate-50/90 p-4 text-sm text-slate-600 shadow-sm dark:border-border/70 dark:bg-background/35 dark:text-muted-foreground dark:shadow-none'
-                >
-                  <IconSparkles className='mt-0.5 size-4 text-sky-600 dark:text-primary' />
-                  <span>{item}</span>
+            <CardContent>
+              <div className='flex flex-col gap-5 rounded-2xl border border-slate-200/90 bg-slate-50/85 p-5 shadow-sm lg:flex-row lg:items-center lg:justify-between dark:border-border/70 dark:bg-background/35 dark:shadow-none'>
+                <div className='min-w-0 space-y-3'>
+                  <div className='flex flex-wrap items-center gap-2'>
+                    <h3 className='text-lg font-semibold text-slate-900 dark:text-foreground'>塔台</h3>
+                    <Badge variant='outline' className='rounded-full border-primary/15 bg-primary/8 text-primary dark:bg-primary/12'>订阅转换</Badge>
+                    <Badge variant='outline' className={`rounded-full ${badgeClassMap.iOS}`}>iOS</Badge>
+                  </div>
+                  <p className='text-sm text-slate-600 dark:text-muted-foreground'>将订阅转换为目标客户端支持的格式，再导入客户端使用。</p>
+                  <p className='text-sm text-slate-500 dark:text-muted-foreground'>复制订阅链接，在塔台中选择目标格式完成转换，再将结果导入客户端。</p>
+                  <AppDownloadAccount appName='塔台' />
                 </div>
-              ))}
+                <div className='flex shrink-0 flex-wrap gap-3'>
+                  <Button className='min-h-10 w-full sm:w-auto' asChild>
+                    <a href='https://apps.apple.com/us/app/%E5%A1%94%E5%8F%B0/id6797458927' target='_blank' rel='noreferrer'>
+                      <IconDownload className='size-4' />
+                      下载塔台
+                    </a>
+                  </Button>
+                  <Button variant='outline' className='min-h-10 w-full bg-white/90 sm:w-auto dark:bg-transparent' onClick={copySubscribe}>
+                    <IconCopy className='size-4' />
+                    {copied ? '已复制订阅链接' : '复制订阅链接'}
+                  </Button>
+                </div>
+              </div>
             </CardContent>
           </Card>
 
@@ -529,7 +535,8 @@ export function ClientsPage() {
                         </div>
                       ) : null}
                       <div className='mt-auto pt-5'>
-                        <div className='flex flex-wrap gap-3'>
+                        <AppDownloadAccount appName={client.name} />
+                        <div className='mt-3 flex flex-wrap gap-3'>
                           {client.downloads?.length ? (
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
