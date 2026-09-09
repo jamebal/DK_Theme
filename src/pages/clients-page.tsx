@@ -60,6 +60,7 @@ type ClientItem = {
   link: string
   downloads?: ClientDownloadOption[]
   badges?: string[]
+  platformBadges?: Partial<Record<PlatformFilter, string[]>>
   supportsScheme?: boolean
   schemeLabel?: string
   schemeBuilder?: (url: string) => string
@@ -112,6 +113,7 @@ const clashVergeRevDownloads: ClientDownloadOption[] = [
 
 const badgeClassMap: Record<string, string> = {
   推荐: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300',
+  免费: 'border-teal-200 bg-teal-50 text-teal-700 dark:border-teal-500/30 dark:bg-teal-500/10 dark:text-teal-300',
   iOS: 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-300',
   'Mac (Apple Silicon)': 'border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-500/30 dark:bg-violet-500/10 dark:text-violet-300',
   Android: 'border-lime-200 bg-lime-50 text-lime-700 dark:border-lime-500/30 dark:bg-lime-500/10 dark:text-lime-300',
@@ -127,6 +129,7 @@ const clients: ClientItem[] = [
     link: 'https://github.com/2dust/v2rayN/releases/latest',
     downloads: v2rayNDownloads,
     badges: ['推荐'],
+    platformBadges: { 'mac-apple-silicon': ['推荐', '免费'] },
     importHint: '下载链接始终前往 GitHub 最新发布页，请选择对应系统和芯片架构的安装包。',
     deviceTypes: ['desktop'],
     platforms: ['windows', 'mac-intel', 'mac-apple-silicon'],
@@ -139,6 +142,7 @@ const clients: ClientItem[] = [
     primary: '下载最新版本',
     link: 'https://github.com/clash-verge-rev/clash-verge-rev/releases/latest',
     downloads: clashVergeRevDownloads,
+    platformBadges: { 'mac-apple-silicon': ['推荐', '免费'] },
     supportsScheme: true,
     schemeLabel: '快速导入配置',
     schemeBuilder: (url) => `clash://install-config?url=${encodeURIComponent(url)}&name=${encodeURIComponent(`${appConfig.appName}订阅`)}`,
@@ -154,6 +158,7 @@ const clients: ClientItem[] = [
     primary: '前往下载',
     link: 'https://apps.apple.com/us/app/shadowrocket/id932747118',
     badges: ['推荐', 'iOS', 'Mac (Apple Silicon)'],
+    platformBadges: { 'mac-apple-silicon': ['iOS', 'Mac (Apple Silicon)'] },
     supportsScheme: true,
     schemeBuilder: (url) => `shadowrocket://add/sub://${btoa(Array.from(new TextEncoder().encode(url), byte => String.fromCharCode(byte)).join(''))}`,
     importHint: '支持 Shadowrocket 一键导入，也可以通过二维码扫码添加。',
@@ -198,13 +203,49 @@ const clients: ClientItem[] = [
     summary: '适合需要高级分流、脚本与策略控制的 Apple 用户。',
     primary: '前往下载',
     link: 'https://apps.apple.com/us/app/surge-5/id1442620678',
-    badges: ['iOS', 'Mac (Apple Silicon)'],
+    badges: ['推荐', 'iOS', 'Mac (Apple Silicon)'],
     supportsScheme: true,
     schemeBuilder: (url) => `surge:///install-config?url=${encodeURIComponent(url)}`,
     importHint: '支持 Surge 一键导入，失败时可复制订阅后手动新建远程配置。',
     compatibilityNote: '仅在 Apple Silicon Mac 下归入桌面端筛选结果。',
     deviceTypes: ['desktop', 'mobile'],
     platforms: ['ios', 'mac-apple-silicon'],
+  },
+  {
+    name: 'sing-box',
+    platform: 'iOS',
+    image: 'https://is1-ssl.mzstatic.com/image/thumb/PurpleSource211/v4/fb/bd/32/fbbd322d-ab4b-7acf-14fc-fbc5ac2ce966/Placeholder.mill/400x400bb-75.webp',
+    summary: '基于 sing-box 的 iOS 客户端，适合使用 sing-box 配置的用户。',
+    primary: '前往下载',
+    link: 'https://apps.apple.com/us/app/sing-box-mt/id6785326793',
+    badges: ['免费', 'iOS'],
+    importHint: '复制订阅链接后，在客户端内添加远程配置，请使用 sing-box 格式的订阅。',
+    deviceTypes: ['mobile'],
+    platforms: ['ios'],
+  },
+  {
+    name: 'Egern',
+    platform: 'iOS',
+    image: 'https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/09/98/bc/0998bc1a-a8e5-0748-e866-9be64950bfc4/Placeholder.mill/400x400bb-75.webp',
+    summary: '适合需要规则分流与网络配置管理的 iOS 用户。',
+    primary: '前往下载',
+    link: 'https://apps.apple.com/us/app/egern/id1616105820',
+    badges: ['免费', 'iOS'],
+    importHint: '复制订阅链接后，在客户端内手动添加，请使用 Egern 支持的订阅格式。',
+    deviceTypes: ['mobile'],
+    platforms: ['ios'],
+  },
+  {
+    name: 'clash-mi',
+    platform: 'iOS',
+    image: 'https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/17/62/0c/17620c85-db19-86f6-7c8a-9bb483413bcf/Placeholder.mill/400x400bb-75.webp',
+    summary: '适合偏好 Clash 配置与规则分流的 iOS 用户。',
+    primary: '前往下载',
+    link: 'https://apps.apple.com/us/app/clash-mi/id6744321968',
+    badges: ['免费', 'iOS'],
+    importHint: '复制订阅链接后，在客户端内添加远程配置，请使用 Clash 格式的订阅。',
+    deviceTypes: ['mobile'],
+    platforms: ['ios'],
   },
   {
     name: 'NekoBox',
@@ -219,6 +260,9 @@ const clients: ClientItem[] = [
     platforms: ['android'],
   },
 ]
+
+const iosClientOrder = ['Shadowrocket', 'Surge', 'sing-box', 'Egern', 'clash-mi', 'Quantumult X', 'Stash']
+const macAppleSiliconClientOrder = ['Surge', 'clash-verge-rev', 'v2rayN', 'Shadowrocket', 'Quantumult X', 'Stash']
 
 export function ClientsPage() {
   const { subscribe } = useAuth()
@@ -256,7 +300,20 @@ export function ClientsPage() {
   }, [deviceType])
 
   const filteredClients = useMemo(
-    () => clients.filter((client) => client.deviceTypes.includes(deviceType) && client.platforms.includes(platformFilter)),
+    () => {
+      const filtered = clients.filter((client) => client.deviceTypes.includes(deviceType) && client.platforms.includes(platformFilter))
+      const order = platformFilter === 'ios' ? iosClientOrder
+        : platformFilter === 'mac-apple-silicon' ? macAppleSiliconClientOrder
+        : null
+      if (order) {
+        const rank = (name: string) => {
+          const index = order.indexOf(name)
+          return index === -1 ? order.length : index
+        }
+        filtered.sort((a, b) => rank(a.name) - rank(b.name))
+      }
+      return filtered
+    },
     [deviceType, platformFilter],
   )
 
@@ -448,7 +505,7 @@ export function ClientsPage() {
                           <div>
                             <div className='flex flex-wrap items-center gap-2'>
                               <h3 className='text-lg font-semibold text-slate-900 dark:text-foreground'>{client.name}</h3>
-                              {client.badges?.map((badge) => (
+                              {(client.platformBadges?.[platformFilter] ?? client.badges)?.map((badge) => (
                                 <Badge
                                   key={badge}
                                   variant='outline'
