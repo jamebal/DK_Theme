@@ -4,14 +4,12 @@ import { Badge } from '@/components/ui/badge'
 import {
   Card,
   CardContent,
-  CardDescription,
-  CardTitle,
 } from '@/components/ui/card'
 import { SubscriptionLink } from '@/components/subscription-link'
 import { useAuth } from '@/features/auth/auth-context'
 import { getTrafficLogs } from '@/lib/api/services/traffic'
 import { formatBytes, formatDateTime } from '@/lib/format'
-import { Activity, CalendarClock, Gauge, Layers3, Sparkles, TrendingUp, Zap } from 'lucide-react'
+import { Activity, CalendarClock, Layers3, Link2 } from 'lucide-react'
 
 const ChartAreaInteractive = lazy(() => import('@/components/chart-area-interactive').then((module) => ({ default: module.ChartAreaInteractive })))
 const TrafficWeeklySummary = lazy(() => import('@/components/traffic-weekly-summary').then((module) => ({ default: module.TrafficWeeklySummary })))
@@ -63,130 +61,83 @@ export function DashboardPage() {
   const usageRate = totalTraffic > 0 ? Math.min(100, Math.round((usedTraffic / totalTraffic) * 100)) : 0
   const usageTone = usageRate >= 85 ? '需关注' : usageRate >= 60 ? '持续使用中' : '状态健康'
   const dashboardUpdatedAtLabel = trafficLogsQuery.dataUpdatedAt ? formatDashboardUpdatedAt(new Date(trafficLogsQuery.dataUpdatedAt)) : '--'
-  const remainingRate = totalTraffic > 0 ? Math.max(0, 100 - usageRate) : 0
-  const usageDelta = usageRate >= 85 ? '接近上限' : usageRate >= 60 ? '建议留意使用增速' : '当前余量充足'
 
   return (
     <>
-      <div className='px-4 lg:px-6'>
-        <Card className='overflow-hidden border-slate-200/80 bg-[linear-gradient(135deg,rgba(255,255,255,0.98),rgba(244,247,252,0.92))] shadow-sm dark:border-border/70 dark:bg-[linear-gradient(135deg,rgba(17,24,39,0.96),rgba(15,23,42,0.92))]'>
-          <CardContent className='grid gap-6 p-5 lg:grid-cols-[1.12fr_0.88fr] lg:items-stretch lg:p-6'>
-            <div className='flex h-full flex-col space-y-5'>
-              <div className='flex flex-wrap items-center gap-2'>
-                <Badge variant='outline' className='rounded-full border-primary/15 bg-primary/8 px-2.5 py-1 text-primary'>
-                  <Sparkles className='size-3.5' />
-                  用户中心
-                </Badge>
-                <Badge variant='outline' className='rounded-full px-2.5 py-1 text-xs'>
-                  {usageTone}
-                </Badge>
-              </div>
+      <section className='space-y-5 px-4 lg:px-6' aria-label='账户概览'>
+        <header>
+          <h1 className='text-2xl font-semibold tracking-tight text-slate-900 dark:text-foreground'>欢迎回来</h1>
+          <p className='mt-1 break-all text-sm text-slate-500 dark:text-muted-foreground'>{user?.email ?? '用户'}</p>
+        </header>
 
-              <div className='space-y-2'>
-                <CardTitle className='break-all text-[30px] font-semibold tracking-tight text-slate-900 dark:text-foreground'>
-                  欢迎回来，{user?.email ?? '用户'}
-                </CardTitle>
-                <CardDescription className='max-w-xl text-sm leading-6 text-slate-500 dark:text-muted-foreground'>
-                  查看当前套餐、到期时间与流量使用情况。
-                </CardDescription>
-              </div>
+        <Card className='gap-0 overflow-hidden border-slate-200/80 py-0 shadow-sm dark:border-border/70'>
+          <CardContent className='p-0'>
+            <div className='grid md:grid-cols-2'>
+              <div className='flex min-w-0 flex-col bg-primary/[0.03] p-5 sm:p-6 lg:p-7'>
+                <h2 className='flex items-center gap-2 text-sm font-medium text-slate-500 dark:text-muted-foreground'>
+                  <Layers3 className='size-4 text-primary' aria-hidden='true' />
+                  当前订阅
+                </h2>
+                <div className='mt-5 break-words text-2xl font-semibold leading-snug tracking-tight text-slate-900 dark:text-foreground'>{planName}</div>
+                <div className='mt-2 text-sm text-slate-500 dark:text-muted-foreground'>每周期 {formatBytes(totalTraffic)} 流量</div>
 
-              <div className='grid flex-1 content-end gap-2.5 sm:grid-cols-2'>
-                <div className='rounded-2xl border border-slate-200/80 bg-white/75 px-3.5 py-4 shadow-sm dark:border-border/70 dark:bg-background/35'>
-                  <div className='flex min-h-[92px] flex-col'>
-                    <div className='flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.14em] text-slate-500 dark:text-muted-foreground'>
-                      <Layers3 className='size-3.5' /> 当前套餐
-                    </div>
-                    <div className='mt-2.5 text-base font-semibold text-slate-900 dark:text-foreground'>{planName}</div>
-                    <div className='mt-auto pt-2 text-xs text-slate-500 dark:text-muted-foreground'>当前订阅周期</div>
-                  </div>
-                </div>
-
-                <div className='rounded-2xl border border-slate-200/80 bg-white/75 px-3.5 py-4 shadow-sm dark:border-border/70 dark:bg-background/35'>
-                  <div className='flex min-h-[92px] flex-col'>
-                    <div className='flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.14em] text-slate-500 dark:text-muted-foreground'>
-                      <CalendarClock className='size-3.5' /> 到期时间
-                    </div>
-                    <div className='mt-2.5 text-base font-semibold text-slate-900 dark:text-foreground'>{expiredAt === null ? '长期有效' : formatDateTime(expiredAt)}</div>
-                    <div className='mt-auto pt-2 text-xs text-slate-500 dark:text-muted-foreground'>{expiredAt ? `剩余 ${Math.max(0, Math.ceil((expiredAt * 1000 - Date.now()) / 86400000))} 天` : '订阅有效期'}</div>
+                <div className='mt-auto pt-6'>
+                  <div className='flex flex-wrap items-center justify-between gap-2 border-t border-slate-200/80 pt-4 text-xs dark:border-border/70'>
+                    <span className='flex items-center gap-1.5 text-slate-500 dark:text-muted-foreground'>
+                      <CalendarClock className='size-3.5' aria-hidden='true' /> 到期时间
+                    </span>
+                    <span className='font-medium tabular-nums text-slate-700 dark:text-foreground'>{expiredAt === null ? '长期有效' : formatDateTime(expiredAt)}</span>
                   </div>
                 </div>
               </div>
-              <div className='space-y-3 pt-1'>
-                <div className='text-sm font-medium'>订阅链接</div>
-                <SubscriptionLink url={subscribe?.subscribe_url} />
-              </div>
-            </div>
 
-            <div className='flex h-full flex-col rounded-3xl border border-slate-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.92),rgba(248,250,252,0.88))] p-4 shadow-sm dark:border-border/70 dark:bg-[linear-gradient(180deg,rgba(15,23,42,0.62),rgba(15,23,42,0.42))] lg:p-5'>
-              <div className='flex flex-col items-start gap-3 sm:flex-row sm:justify-between'>
-                <div>
-                  <div className='flex items-center gap-2 text-sm font-medium text-slate-900 dark:text-foreground'>
-                    <Activity className='size-4 text-primary' />
+              <div className='min-w-0 border-t border-slate-200/80 p-5 sm:p-6 md:border-l md:border-t-0 lg:p-7 dark:border-border/70'>
+                <div className='flex flex-wrap items-center justify-between gap-2'>
+                  <h2 className='flex items-center gap-2 text-sm font-medium text-slate-500 dark:text-muted-foreground'>
+                    <Activity className='size-4 text-primary' aria-hidden='true' />
                     本周期流量进度
-                  </div>
-                  <div className='mt-1 text-xs text-slate-500 dark:text-muted-foreground'>用量概览、剩余额度与当前状态</div>
-                </div>
-                <Badge
-                  variant='outline'
-                  className={`rounded-full px-2.5 py-1 text-xs ${usageRate >= 85 ? 'border-rose-200 bg-rose-50 text-rose-600 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300' : usageRate >= 60 ? 'border-amber-200 bg-amber-50 text-amber-600 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300' : 'border-emerald-200 bg-emerald-50 text-emerald-600 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300'}`}
-                >
-                  {usageTone}
-                </Badge>
-              </div>
-
-              <div className='mt-4 rounded-[28px] border border-slate-200/80 bg-white/80 p-4 dark:border-border/70 dark:bg-background/40'>
-                <div className='flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between'>
-                  <div>
-                    <div className='flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.14em] text-slate-500 dark:text-muted-foreground'>
-                      <Gauge className='size-3.5 text-primary' /> 使用率
-                    </div>
-                    <div className='mt-2 flex items-end gap-2'>
-                      <div className='text-[38px] font-semibold tracking-tight text-slate-900 dark:text-foreground'>{usageRate}%</div>
-                      <div className='pb-1 text-xs text-slate-500 dark:text-muted-foreground'>已用配额</div>
-                    </div>
-                  </div>
-
-                  <div className='rounded-2xl border border-slate-200/80 bg-slate-50/80 px-3 py-2 text-right dark:border-border/70 dark:bg-background/40'>
-                    <div className='text-[11px] font-medium uppercase tracking-[0.14em] text-slate-500 dark:text-muted-foreground'>剩余比例</div>
-                    <div className='mt-1 text-lg font-semibold text-slate-900 dark:text-foreground'>{remainingRate}%</div>
-                  </div>
+                  </h2>
+                  <span className={`text-xs font-medium ${usageRate >= 85 ? 'text-rose-600 dark:text-rose-300' : usageRate >= 60 ? 'text-amber-600 dark:text-amber-300' : 'text-emerald-600 dark:text-emerald-300'}`}>
+                    {usageTone}
+                  </span>
                 </div>
 
-                <div className='mt-4 h-3 overflow-hidden rounded-full bg-slate-200/80 dark:bg-white/10'>
+                <div className='mt-4 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1'>
+                  <div className='flex items-baseline gap-2'>
+                    <span className='text-[40px] font-semibold leading-tight tracking-tight tabular-nums text-slate-900 dark:text-foreground'>{usageRate}<span className='ml-0.5 text-xl'>%</span></span>
+                    <span className='text-xs text-slate-500 dark:text-muted-foreground'>已使用</span>
+                  </div>
+                  <span className='text-sm text-slate-500 dark:text-muted-foreground'>剩余 <span className='font-medium tabular-nums text-slate-900 dark:text-foreground'>{formatBytes(remainingTraffic)}</span></span>
+                </div>
+
+                <div className='mt-4 h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-white/10' role='progressbar' aria-label='本周期流量使用率' aria-valuenow={usageRate} aria-valuemin={0} aria-valuemax={100}>
                   <div
                     className={`h-full rounded-full transition-all ${usageRate >= 85 ? 'bg-rose-500' : usageRate >= 60 ? 'bg-amber-500' : 'bg-primary'}`}
                     style={{ width: `${usageRate}%` }}
                   />
                 </div>
+                <div className='mt-2 text-xs tabular-nums text-slate-500 dark:text-muted-foreground'>已用 {formatBytes(usedTraffic)} / {formatBytes(totalTraffic)}</div>
 
-                <div className='mt-3 flex flex-col gap-2 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between dark:text-muted-foreground'>
-                  <span>已用 {formatBytes(usedTraffic)}</span>
-                  <span>总量 {formatBytes(totalTraffic)}</span>
-                </div>
-              </div>
-
-              <div className='mt-3 grid gap-3 sm:grid-cols-2'>
-                <div className='rounded-2xl border border-slate-200/80 bg-white/70 p-4 dark:border-border/70 dark:bg-background/35'>
-                  <div className='flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.14em] text-slate-500 dark:text-muted-foreground'>
-                    <Zap className='size-3.5 text-primary' /> 已用流量
-                  </div>
-                  <div className='mt-2 text-xl font-semibold text-slate-900 dark:text-foreground'>{formatBytes(usedTraffic)}</div>
-                  <div className='mt-1 text-xs text-slate-500 dark:text-muted-foreground'>{usageDelta}</div>
-                </div>
-
-                <div className='rounded-2xl border border-slate-200/80 bg-white/70 p-4 dark:border-border/70 dark:bg-background/35'>
-                  <div className='flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.14em] text-slate-500 dark:text-muted-foreground'>
-                    <TrendingUp className='size-3.5 text-emerald-500' /> 剩余流量
-                  </div>
-                  <div className='mt-2 text-xl font-semibold text-slate-900 dark:text-foreground'>{formatBytes(remainingTraffic)}</div>
-                  <div className='mt-1 text-xs text-slate-500 dark:text-muted-foreground'>仍可继续使用的配额</div>
+                <div className='mt-5 flex flex-wrap items-center justify-between gap-2 border-t border-slate-200/80 pt-4 text-xs dark:border-border/70'>
+                  <span className='flex items-center gap-1.5 text-slate-500 dark:text-muted-foreground'>
+                    <CalendarClock className='size-3.5' aria-hidden='true' /> 流量重置时间
+                  </span>
+                  <span className='font-medium text-slate-700 dark:text-foreground'>
+                    {subscribe?.reset_day === null ? '不自动重置' : subscribe?.reset_day === undefined ? '暂无信息' : subscribe.reset_day === 0 ? '今日重置' : `${subscribe.reset_day} 天后重置`}
+                  </span>
                 </div>
               </div>
             </div>
+
+            <div className='grid items-center gap-3 border-t border-slate-200/80 px-5 py-4 sm:grid-cols-[auto_minmax(0,1fr)] sm:gap-6 sm:px-6 lg:px-7 dark:border-border/70'>
+              <div className='flex items-center gap-2 text-sm font-medium text-slate-500 dark:text-muted-foreground'>
+                <Link2 className='size-4' aria-hidden='true' /> 订阅链接
+              </div>
+              <SubscriptionLink url={subscribe?.subscribe_url} />
+            </div>
           </CardContent>
         </Card>
-      </div>
+      </section>
 
       <section className='space-y-4 px-4 pb-2 pt-6 lg:px-6 lg:pt-7'>
         <div className='flex flex-wrap items-end justify-between gap-3'>

@@ -1,8 +1,9 @@
 import { memo, useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Activity, ArrowDown, ArrowUp, ChevronDown, Globe2, Radio, RefreshCw, Search } from 'lucide-react'
+import { Activity, ArrowDown, ArrowUp, Globe2, Radio, RefreshCw, Search } from 'lucide-react'
 import { getNodeStatuses } from '@/lib/api/services/node-status'
 import { createKomariIndex, matchNodeUuid, monitorForUuid, type NodeMonitor } from '@/lib/api/services/komari'
+import { LineQuality } from '@/features/nodes/line-quality'
 import { useKomari } from '@/features/nodes/use-komari'
 import type { NodeStatus } from '@/lib/api/types'
 import { appConfig } from '@/lib/config'
@@ -48,13 +49,7 @@ const NodeCard = memo(function NodeCard({ node, monitor }: { node: NodeStatus; m
       <div><p className='mb-2 flex items-center gap-1 text-[11px] text-muted-foreground'><ArrowDown className='size-3 text-sky-500' />下行速率</p><p className='text-sm font-semibold tabular-nums'>{speed(monitor?.download)}</p></div>
     </div>
     <div className='grid grid-cols-3 gap-4 p-5'><Meter label='CPU' value={monitor?.cpu} /><Meter label='内存' value={monitor?.memory} /><Meter label='磁盘' value={monitor?.disk} /></div>
-    {pings.length > 0 && <div className='mt-auto border-t bg-muted/15 px-5 py-3'>
-      <details className='group'>
-        <summary className='flex cursor-pointer list-none items-center justify-between text-xs font-medium [&::-webkit-details-marker]:hidden'>线路质量 <span className='flex items-center gap-2 text-[10px] font-normal text-muted-foreground'>{pings.length} 个探测点<ChevronDown className='size-3.5 transition-transform group-open:rotate-180' /></span></summary>
-        <div className='mt-3 space-y-2.5'>{pings.map(ping => <div key={ping.id} className='grid grid-cols-[1fr_auto_auto] items-center gap-3 text-[11px]'><span className='truncate text-muted-foreground'>{ping.name}</span><span className='tabular-nums'>{ping.loss === 100 ? '超时' : ping.latency === null ? '—' : `${ping.latency} ms`}</span><span className={cn('w-20 text-right tabular-nums', (ping.loss ?? 0) > 5 ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground')}>{ping.loss == null ? '丢包未知' : `${ping.loss.toFixed(1)}% 丢包`}</span></div>)}</div>
-        <p className='mt-3 text-[10px] leading-relaxed text-muted-foreground'>延迟为主机到探测点的测量值，不代表你的客户端连接延迟。</p>
-      </details>
-    </div>}
+    {monitor && pings.length > 0 && <LineQuality monitor={monitor} />}
   </li>
 }, (previous, next) => previous.node === next.node && JSON.stringify(previous.monitor && { ...previous.monitor, checkedAt: null, uptime: null }) === JSON.stringify(next.monitor && { ...next.monitor, checkedAt: null, uptime: null }))
 
@@ -96,6 +91,7 @@ export function NodeStatusPage() {
       <div className='flex items-center gap-3'><span className='hidden text-xs text-muted-foreground sm:block'>{appConfig.enableMock ? '演示模式' : monitoring.connection === 'connected' ? '实时连接 · 每 1 秒更新' : monitoring.connection === 'paused' ? '监控已暂停' : '连接中 · 低频同步'}</span><Button size='sm' variant='outline' className='rounded-lg' disabled={refreshing} onClick={() => { void query.refetch(); if (!appConfig.enableMock) void monitoring.refetch() }}><RefreshCw className={cn('size-3.5', refreshing && 'animate-spin motion-reduce:animate-none')} />刷新状态</Button></div>
     </header>
     {unavailable && <p role='alert' className='rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-xs leading-5 text-amber-700 dark:text-amber-400'>Komari 监控暂时无法连接，已保留订阅节点。请稍后刷新状态。</p>}
+    {monitoring.pingTasksError && <p role='alert' className='text-xs text-muted-foreground'>线路配置暂时加载失败，当前显示已有探测结果。</p>}
     {query.isError && <p role='alert' className='rounded-xl border border-destructive/20 bg-destructive/5 p-4 text-sm text-destructive'>节点列表{query.data ? '刷新' : '加载'}失败，请重试。{query.data ? '当前显示上次获取的列表。' : ''}</p>}
     <div className='flex flex-col justify-between gap-4 sm:flex-row sm:items-center'>
       <div className='flex w-fit max-w-full gap-1 overflow-x-auto rounded-xl bg-muted/50 p-1' role='group' aria-label='按节点状态筛选'>{filters.map(item => <button key={item.value} onClick={() => setFilter(item.value)} aria-pressed={filter === item.value} className={cn('shrink-0 rounded-lg px-3 py-2 text-xs transition-colors', filter === item.value ? 'bg-card font-medium shadow-sm' : 'text-muted-foreground hover:text-foreground')}>{item.label}<span className='ml-1.5 text-[10px] tabular-nums opacity-60'>{counts[item.value]}</span></button>)}</div>

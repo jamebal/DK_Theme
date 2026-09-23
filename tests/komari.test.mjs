@@ -7,7 +7,7 @@ import ts from 'typescript'
 const source = (await readFile(new URL('../src/lib/api/services/komari.ts', import.meta.url), 'utf8'))
   .replace("import { appConfig } from '@/lib/config'", "const appConfig = { nodeStatus: { komariApiUrl: '/api/komari/rpc2' } }")
 const { outputText } = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2023 } })
-const { matchNodeMonitor, getKomariData } = await import(`data:text/javascript;base64,${Buffer.from(outputText).toString('base64')}`)
+const { matchNodeMonitor, getKomariData, komariRpc } = await import(`data:text/javascript;base64,${Buffer.from(outputText).toString('base64')}`)
 const now = Date.parse('2026-09-08T04:00:00Z')
 const node = { id: 1, name: '专线 美国-1 | 1x', online: null }
 const status = { time: new Date(now).toISOString(), online: true, cpu: 0, ram: 512, ram_total: 1024, disk: 25, disk_total: 100, net_in: 0, net_out: 1024, uptime: 3600, ping: { a: { name: '广州电信', latest: 0, loss: 1.5 }, b: { name: '超时线路', latest: -1, loss: 100 } } }
@@ -55,7 +55,7 @@ test('malformed metrics and zero capacities stay unknown', () => {
   assert.equal(result.memory, null)
   assert.equal(result.disk, null)
 })
-test('RPC requests omit credentials, join both methods, and reject RPC errors', async () => {
+test('RPC requests omit credentials, join all methods, and reject RPC errors', async () => {
   const original = globalThis.fetch
   const methods = []
   try {
@@ -65,13 +65,37 @@ test('RPC requests omit credentials, join both methods, and reject RPC errors', 
       assert.equal(options.headers.Authorization, undefined)
       const { method } = JSON.parse(options.body)
       methods.push(method)
-      return Response.json({ result: method === 'common:getNodes' ? data.nodes : data.statuses })
+      return Response.json({ result: method === 'public:getPublicPingTasks' ? [] : method === 'common:getNodes' ? data.nodes : data.statuses })
     }
-    assert.deepEqual(await getKomariData(), data)
-    assert.deepEqual(methods.sort(), ['common:getNodes', 'common:getNodesLatestStatus'])
+    assert.deepEqual(await getKomariData(), { ...data, pingTasks: [] })
+    assert.deepEqual(methods.sort(), ['common:getNodes', 'common:getNodesLatestStatus', 'public:getPublicPingTasks'])
     globalThis.fetch = async () => Response.json({ error: { code: -32601 } })
     await assert.rejects(getKomariData(), /无效/)
     globalThis.fetch = async () => new Response('', { status: 403 })
     await assert.rejects(getKomariData(), /403/)
+  } finally { globalThis.fetch = original }
+})
+
+test('public tasks control names, ordering and node assignments, including missing measurements', () => {
+  const pingTasks = [
+    { id: 'b', name: '移动', weight: 2, clients: ['a'] },
+    { id: 'a', name: '电信', weight: 1, clients: ['a'] },
+    { id: 'c', name: '未绑定', weight: 0, clients: ['other'] },
+    { id: 'd', name: '无样本', weight: 3, clients: ['a'] },
+  ]
+  const result = matchNodeMonitor(node, { ...data, pingTasks }, now)
+  assert.deepEqual(result.pings.map(ping => ping.name), ['电信', '移动', '无样本'])
+  assert.equal(result.pings[2].latency, null)
+  assert.equal(result.pings[2].loss, null)
+  assert.deepEqual(matchNodeMonitor(node, { ...data, pingTasks: [] }, now).pings, [])
+})
+test('task RPC accepts arrays only and status RPC rejects arrays', async () => {
+  const original = globalThis.fetch
+  try {
+    globalThis.fetch = async () => Response.json({ result: {} })
+    await assert.rejects(komariRpc('public:getPublicPingTasks'), /无效/)
+    globalThis.fetch = async () => Response.json({ result: [] })
+    assert.deepEqual(await komariRpc('public:getPublicPingTasks'), [])
+    await assert.rejects(komariRpc('common:getNodesLatestStatus'), /无效/)
   } finally { globalThis.fetch = original }
 })

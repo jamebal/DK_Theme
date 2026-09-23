@@ -14,6 +14,7 @@ export const mockUser: UserInfo = {
 
 export const mockSubscribe: SubscribeInfo = {
   subscribe_url: 'https://example.com/sub/demo-token',
+  reset_day: 12,
   token: 'demo-token',
   transfer_enable: mockUser.transfer_enable,
   d: mockUser.d,

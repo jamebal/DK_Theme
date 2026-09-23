@@ -10,7 +10,7 @@ type RawUsage = {
   transfer_enable?: number | string | null
   expired_at?: number | string | null
 }
-type RawSubscribeInfo = Omit<SubscribeInfo, keyof RawUsage> & RawUsage
+type RawSubscribeInfo = Omit<SubscribeInfo, keyof RawUsage | 'reset_day'> & RawUsage & { reset_day?: number | string | null }
 type RawUserInfo = Omit<UserInfo, keyof RawUsage> & RawUsage
 
 function optionalNumber(value: unknown) {
@@ -34,7 +34,11 @@ function normalizeUserInfo(user: RawUserInfo): UserInfo {
 }
 
 function normalizeSubscribeInfo(subscribe: RawSubscribeInfo): SubscribeInfo {
-  return { ...subscribe, ...normalizeUsage(subscribe) }
+  return {
+    ...subscribe,
+    ...normalizeUsage(subscribe),
+    reset_day: subscribe.reset_day === null ? null : optionalNumber(subscribe.reset_day),
+  }
 }
 
 export async function getUserInfo() {

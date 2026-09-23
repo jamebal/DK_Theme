@@ -24,6 +24,7 @@ export type UserInfo = {
 
 export type SubscribeInfo = {
   subscribe_url: string;
+  reset_day?: number | null;
   token?: string;
   transfer_enable?: number;
   d?: number;

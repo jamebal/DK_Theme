@@ -88,6 +88,8 @@ location = /public/app-accounts.json {
 
 通过 `common:getNodesLatestStatus` 获取在线状态、CPU / 内存 / 磁盘、上下行速率、各探测点延迟 / 丢包；主机信息通过 UUID 关联。实时状态复用页面级 WebSocket（`/api/rpc2`），每 1 秒发送一次 `common:getNodesLatestStatus` 请求，并非主动订阅推送。节点资料单独缓存 5 分钟；连接失败退回 30 秒 HTTP 刷新，采用 1–30 秒指数退避（含随机抖动）重连。页面隐藏或离线时关闭连接、暂停查询，返回页面后重连；离开页面清理连接、计时器和未完成请求。名称关联只在节点列表或监控资料变化时重新计算，无变化卡片跳过渲染。超过 2 分钟的在线上报显示未知，不将节点资料的 `updated_at` 当作在线依据。探测延迟不是用户客户端延迟，流量速率为主机总速率。监控失败不影响订阅节点展示，也不会向 Komari 发送订阅登录凭据。
 
+线路质量通过 `public:getPublicPingTasks` 获取线路名称、权重排序和绑定节点，通过 `common:getNodesLatestStatus` 的 `ping` 获取实时延迟与丢包率。展开后以左右两列展示延迟 / 丢包率及色块历史；历史补充调用 `common:getRecords`（`type: ping`、`uuid`、最近 1 小时），按节点共享缓存，每 60 秒刷新。悬停、点击色块或使用左右方向键可查看时间段、平均延迟或丢包比例与失败 / 总样本数；无样本显示灰色，不将缺失记录当作成功。
+
 `VITE_KOMARI_API_URL` 默认 `/api/komari/rpc2`。开发环境在项目根目录 `.env` 或 `.env.development.local` 中配置 Komari 上游地址：
 
 ```env

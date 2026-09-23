@@ -2,7 +2,7 @@ import { appConfig } from '@/lib/config'
 import type { NodeStatus } from '@/lib/api/types'
 
 type RecordValue = Record<string, unknown>
-export type KomariData = { nodes: RecordValue; statuses: RecordValue }
+export type KomariData = { nodes: RecordValue; statuses: RecordValue; pingTasks?: RecordValue[] }
 export type NodeMonitor = {
   uuid: string
   region: string | null
@@ -33,26 +33,28 @@ function percent(used: unknown, total: unknown) {
   const denominator = number(total)
   return numerator !== null && denominator !== null && denominator > 0 ? Math.min(100, numerator / denominator * 100) : null
 }
-export async function komariRpc(method: string, signal?: AbortSignal) {
+export function komariRpc(method: 'public:getPublicPingTasks', signal?: AbortSignal): Promise<RecordValue[]>
+export function komariRpc(method: string, signal?: AbortSignal, params?: RecordValue): Promise<RecordValue>
+export async function komariRpc(method: string, signal?: AbortSignal, params: RecordValue = {}): Promise<RecordValue | RecordValue[]> {
   // Keep subscription credentials out of the public monitoring service.
   const response = await fetch(appConfig.nodeStatus.komariApiUrl, {
     method: 'POST', credentials: 'omit',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ jsonrpc: '2.0', id: method, method, params: {} }),
+    body: JSON.stringify({ jsonrpc: '2.0', id: method, method, params }),
     signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(12000)]) : AbortSignal.timeout(12000),
   })
   if (!response.ok) throw new Error(`Komari HTTP ${response.status}`)
   const body = await response.json()
-  if (body.error || !body.result || typeof body.result !== 'object' || Array.isArray(body.result)) {
+  if (body.error || !body.result || typeof body.result !== 'object' || (method === 'public:getPublicPingTasks' ? !Array.isArray(body.result) : Array.isArray(body.result))) {
     throw new Error('Komari 返回了无效的状态数据')
   }
   return body.result as RecordValue
 }
 export async function getKomariData(signal?: AbortSignal): Promise<KomariData> {
-  const [nodes, statuses] = await Promise.all([
-    komariRpc('common:getNodes', signal), komariRpc('common:getNodesLatestStatus', signal),
+  const [nodes, statuses, pingTasks] = await Promise.all([
+    komariRpc('common:getNodes', signal), komariRpc('common:getNodesLatestStatus', signal), komariRpc('public:getPublicPingTasks', signal),
   ])
-  return { nodes, statuses }
+  return { nodes, statuses, pingTasks }
 }
 
 export function matchNodeMonitor(node: NodeStatus, data: KomariData | undefined, now = Date.now()): NodeMonitor | null {
@@ -91,7 +93,11 @@ export function monitorForUuid(uuid: string, data: KomariData, now = Date.now())
     disk: live ? percent(status.disk, status.disk_total ?? match.value.disk_total) : null,
     upload: live ? number(status.net_out) : null, download: live ? number(status.net_in) : null,
     uptime: live ? number(status.uptime) : null,
-    pings: live ? Object.entries(record(status.ping)).map(([id, value]) => {
+    pings: live ? (data.pingTasks
+      ? data.pingTasks.filter(task => Array.isArray(task.clients) && task.clients.includes(uuid))
+        .sort((a, b) => (number(a.weight) ?? 0) - (number(b.weight) ?? 0) || Number(a.id) - Number(b.id))
+        .map(task => [String(task.id), { ...record(record(status.ping)[String(task.id)]), name: task.name }] as const)
+      : Object.entries(record(status.ping))).map(([id, value]) => {
       const ping = record(value)
       return { id, name: text(ping.name) ?? `线路 ${id}`, latency: number(ping.latest), loss: number(ping.loss) }
     }) : [],

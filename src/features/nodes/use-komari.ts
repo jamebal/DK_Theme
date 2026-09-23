@@ -20,6 +20,8 @@ export function useKomari() {
       if (socket.getSnapshot() === 'paused') {
         void queryClient.cancelQueries({ queryKey: ['komari-nodes'] })
         void queryClient.cancelQueries({ queryKey: ['komari-live-status'] })
+        void queryClient.cancelQueries({ queryKey: ['komari-ping-tasks'] })
+        void queryClient.cancelQueries({ queryKey: ['komari-ping-history'] })
       }
     }
     const unsubscribe = socket.subscribe(cancel)
@@ -28,6 +30,11 @@ export function useKomari() {
   }, [queryClient])
   const nodes = useQuery({
     queryKey: ['komari-nodes'], queryFn: ({ signal }) => komariRpc('common:getNodes', signal),
+    enabled: !appConfig.enableMock && connection !== 'paused', staleTime: 300000,
+    refetchInterval: 300000, retry: 1,
+  })
+  const pingTasks = useQuery({
+    queryKey: ['komari-ping-tasks'], queryFn: ({ signal }) => komariRpc('public:getPublicPingTasks', signal),
     enabled: !appConfig.enableMock && connection !== 'paused', staleTime: 300000,
     refetchInterval: 300000, retry: 1,
   })
@@ -49,12 +56,12 @@ export function useKomari() {
     refetchInterval: connection === 'connected' ? 1000 : 30000,
     refetchIntervalInBackground: false, retry: 1,
   })
-  const data = useMemo(() => nodes.data && statuses.data ? { nodes: nodes.data, statuses: statuses.data } : undefined, [nodes.data, statuses.data])
+  const data = useMemo(() => nodes.data && statuses.data ? { nodes: nodes.data, statuses: statuses.data, pingTasks: pingTasks.data } : undefined, [nodes.data, statuses.data, pingTasks.data])
   return {
-    data, connection, isError: nodes.isError || statuses.isError,
+    data, connection, pingTasksError: pingTasks.isError, isError: nodes.isError || statuses.isError,
     isPending: nodes.isPending || statuses.isPending,
-    isFetching: nodes.isFetching || statuses.isFetching,
+    isFetching: nodes.isFetching || statuses.isFetching || pingTasks.isFetching,
     dataUpdatedAt: statuses.dataUpdatedAt,
-    refetch: () => Promise.all([nodes.refetch(), statuses.refetch()]),
+    refetch: () => Promise.all([nodes.refetch(), statuses.refetch(), pingTasks.refetch(), queryClient.invalidateQueries({ queryKey: ['komari-ping-history'] })]),
   }
 }
